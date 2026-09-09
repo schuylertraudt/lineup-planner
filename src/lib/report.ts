@@ -1,5 +1,7 @@
 import { AssignmentRecord, GameRecord, PlayerRecord, SlotRecord } from "@/lib/offline/DataProvider";
-import { PlayerSeasonTotals } from "@/lib/types";
+import { displayName, PlayerSeasonTotals } from "@/lib/types";
+
+export { displayName } from "@/lib/types";
 
 export interface ReportPeriodRow {
   periodNumber: number;
@@ -13,11 +15,6 @@ export interface ReportPlayerTotal {
   gamePositions: string; // "GK 1 · D 2"
   seasonPeriodsPlayed: number;
   seasonDeviation: number;
-}
-
-export function displayName(p: Pick<PlayerRecord, "firstName" | "lastNameInitial" | "jerseyNumber">) {
-  const base = `${p.firstName} ${p.lastNameInitial}`.trim();
-  return p.jerseyNumber ? `${base} #${p.jerseyNumber}` : base;
 }
 
 export function buildPeriodGrid(

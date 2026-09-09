@@ -17,6 +17,21 @@ export interface RosterPlayer {
 
 export type AvailabilityStatus = "available" | "absent" | "late";
 
+/**
+ * Player name is stored as firstName + optional lastNameInitial + optional
+ * jerseyNumber for backwards compatibility, but the roster UI only exposes a
+ * single "name" field to coaches (typed into firstName) — this renders
+ * whatever combination of those fields a given player actually has.
+ */
+export function displayName(p: {
+  firstName: string;
+  lastNameInitial?: string;
+  jerseyNumber?: string;
+}): string {
+  const base = `${p.firstName} ${p.lastNameInitial ?? ""}`.trim();
+  return p.jerseyNumber ? `${base} #${p.jerseyNumber}` : base;
+}
+
 export interface PlayerSeasonTotals {
   periodsPlayed: number;
   periodsBenched: number;

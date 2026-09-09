@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "@/lib/offline/DataProvider";
 import { computeSeasonTotals } from "@/lib/gameFairness";
-import { emptyTotals } from "@/lib/types";
+import { displayName, emptyTotals } from "@/lib/types";
 
 type SortKey = "name" | "played" | "benched" | "GK" | "D" | "M" | "F" | "deviation";
 
@@ -109,9 +109,7 @@ export default function FairnessPage() {
           <tbody>
             {sorted.map((row) => (
               <tr key={row.player.id} className="border-b border-slate-100">
-                <td className="px-3 py-2 font-semibold whitespace-nowrap">
-                  {row.player.firstName} {row.player.lastNameInitial}
-                </td>
+                <td className="px-3 py-2 font-semibold whitespace-nowrap">{displayName(row.player)}</td>
                 <td className="px-3 py-2 tabular-nums">{row.played}</td>
                 <td className="px-3 py-2 tabular-nums">{row.benched}</td>
                 <td className="px-3 py-2 tabular-nums">{row.groups.GK}</td>

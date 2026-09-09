@@ -6,7 +6,7 @@ import { useData, AssignmentRecord } from "@/lib/offline/DataProvider";
 import { setAssignment, setAvailability, setGamePeriodStatus, updateGame } from "@/lib/offline/actions";
 import { computeSeasonTotals, computeGamePlanCounts, getAssignment, getPeriodAssignments } from "@/lib/gameFairness";
 import { generatePlan } from "@/lib/autofill";
-import { emptyTotals, SlotTemplate } from "@/lib/types";
+import { displayName, emptyTotals, SlotTemplate } from "@/lib/types";
 import { PlayerPicker, PickerCandidate } from "@/components/PlayerPicker";
 
 type Mode = "plan" | "live";
@@ -197,7 +197,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
               const status = availabilityByPlayer[p.id] ?? "available";
               return (
                 <div key={p.id} className="flex items-center justify-between px-3 py-2">
-                  <span>{p.firstName} {p.lastNameInitial}</span>
+                  <span>{displayName(p)}</span>
                   <div className="flex gap-1">
                     {(["available", "late", "absent"] as const).map((s) => (
                       <button
@@ -363,10 +363,7 @@ function PeriodEditor({
             <button key={slot.index} className="w-full flex items-center justify-between px-4 py-3 min-h-touch text-left" onClick={() => onSlotTap(slot.index)}>
               <span className="text-xs font-bold text-slate-400 w-10 shrink-0">{slot.name}</span>
               {player ? (
-                <span className="flex-1 font-semibold">
-                  {player.firstName} {player.lastNameInitial}
-                  {player.jerseyNumber && <span className="text-slate-400 font-normal"> #{player.jerseyNumber}</span>}
-                </span>
+                <span className="flex-1 font-semibold">{displayName(player)}</span>
               ) : (
                 <span className="flex-1 text-slate-400">Tap to assign</span>
               )}
@@ -384,7 +381,7 @@ function PeriodEditor({
           <div className="flex flex-wrap gap-2">
             {bench.map((p) => (
               <span key={p!.id} className="text-sm bg-slate-100 rounded-full px-3 py-1">
-                {p!.firstName} {p!.lastNameInitial}
+                {displayName(p!)}
               </span>
             ))}
           </div>
@@ -414,7 +411,7 @@ function AllPeriodsGrid({
   const playerLabel = (id: string | null) => {
     if (!id) return "—";
     const p = players.find((x) => x.id === id);
-    return p ? `${p.firstName} ${p.lastNameInitial}`.trim() : "?";
+    return p ? displayName(p) : "?";
   };
 
   return (

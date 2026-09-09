@@ -3,41 +3,34 @@
 import { useMemo, useState } from "react";
 import { useData } from "@/lib/offline/DataProvider";
 import { createPlayer, newId, setPlayerActive, updatePlayer } from "@/lib/offline/actions";
-import { parseBulkPlayers } from "@/lib/parseBulkPlayers";
+import { displayName } from "@/lib/types";
 
 export default function RosterPage() {
   const { players, mutate, ready } = useData();
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastNameInitial, setLastNameInitial] = useState("");
-  const [jerseyNumber, setJerseyNumber] = useState("");
+  const [name, setName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const active = useMemo(() => players.filter((p) => p.active).sort((a, b) => a.order - b.order), [players]);
   const inactive = useMemo(() => players.filter((p) => !p.active).sort((a, b) => a.order - b.order), [players]);
 
   async function addPlayer() {
-    if (!firstName.trim()) return;
+    if (!name.trim()) return;
     const maxOrder = players.reduce((m, p) => Math.max(m, p.order), -1);
-    await createPlayer(mutate, { firstName: firstName.trim(), lastNameInitial, jerseyNumber, order: maxOrder + 1 });
-    setFirstName("");
-    setLastNameInitial("");
-    setJerseyNumber("");
+    await createPlayer(mutate, { firstName: name.trim(), order: maxOrder + 1 });
+    setName("");
   }
 
   async function addBulk() {
-    const parsed = parseBulkPlayers(bulkText);
+    const names = bulkText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
     let maxOrder = players.reduce((m, p) => Math.max(m, p.order), -1);
-    for (const p of parsed) {
+    for (const n of names) {
       maxOrder += 1;
-      await mutate("player", newId(), {
-        firstName: p.firstName,
-        lastNameInitial: p.lastNameInitial,
-        jerseyNumber: p.jerseyNumber,
-        active: true,
-        order: maxOrder,
-      });
+      await mutate("player", newId(), { firstName: n, active: true, order: maxOrder });
     }
     setBulkText("");
     setShowBulk(false);
@@ -64,9 +57,15 @@ export default function RosterPage() {
       <div className="card p-4 space-y-3">
         <p className="label m-0">Add a player</p>
         <div className="flex gap-2">
-          <input className="input flex-1" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          <input className="input w-16" placeholder="L." value={lastNameInitial} onChange={(e) => setLastNameInitial(e.target.value)} maxLength={2} />
-          <input className="input w-16" placeholder="#" value={jerseyNumber} onChange={(e) => setJerseyNumber(e.target.value)} maxLength={3} />
+          <input
+            className="input flex-1"
+            placeholder="Player name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addPlayer();
+            }}
+          />
         </div>
         <div className="flex gap-2">
           <button className="btn-primary flex-1" onClick={addPlayer}>Add player</button>
@@ -74,10 +73,10 @@ export default function RosterPage() {
         </div>
         {showBulk && (
           <div className="space-y-2 pt-2 border-t border-slate-200">
-            <p className="text-sm text-slate-500">One player per line: name, optional last initial, optional jersey number.</p>
+            <p className="text-sm text-slate-500">One player name per line.</p>
             <textarea
               className="input min-h-[120px]"
-              placeholder={"Ava T 7\nBen #4\nCarter"}
+              placeholder={"Ava\nBen\nCarter"}
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
             />
@@ -107,9 +106,7 @@ export default function RosterPage() {
           <p className="label">Inactive players</p>
           {inactive.map((p) => (
             <div key={p.id} className="card p-3 flex items-center justify-between opacity-60">
-              <span>
-                {p.firstName} {p.lastNameInitial} {p.jerseyNumber && `#${p.jerseyNumber}`}
-              </span>
+              <span>{displayName(p)}</span>
               <button className="btn-secondary" onClick={() => setPlayerActive(mutate, p.id, true)}>
                 Reactivate
               </button>
@@ -139,23 +136,27 @@ function PlayerRow({
   onDeactivate: () => void;
 }) {
   const { mutate } = useData();
-  const [firstName, setFirstName] = useState(player.firstName);
-  const [lastNameInitial, setLastNameInitial] = useState(player.lastNameInitial);
-  const [jerseyNumber, setJerseyNumber] = useState(player.jerseyNumber);
+  const [name, setName] = useState(displayName(player));
 
   if (editing) {
     return (
       <div className="card p-3 space-y-2">
-        <div className="flex gap-2">
-          <input className="input flex-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          <input className="input w-16" value={lastNameInitial} onChange={(e) => setLastNameInitial(e.target.value)} maxLength={2} />
-          <input className="input w-16" value={jerseyNumber} onChange={(e) => setJerseyNumber(e.target.value)} maxLength={3} />
-        </div>
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === "Enter") {
+              await updatePlayer(mutate, player.id, { firstName: name, lastNameInitial: "", jerseyNumber: "" });
+              onDone();
+            }
+          }}
+        />
         <div className="flex gap-2">
           <button
             className="btn-primary flex-1"
             onClick={async () => {
-              await updatePlayer(mutate, player.id, { firstName, lastNameInitial, jerseyNumber });
+              await updatePlayer(mutate, player.id, { firstName: name, lastNameInitial: "", jerseyNumber: "" });
               onDone();
             }}
           >
@@ -173,11 +174,8 @@ function PlayerRow({
         <button className="btn-secondary !min-h-0 !min-w-0 px-2 py-0.5 text-xs" disabled={!onMoveUp} onClick={onMoveUp}>▲</button>
         <button className="btn-secondary !min-h-0 !min-w-0 px-2 py-0.5 text-xs mt-1" disabled={!onMoveDown} onClick={onMoveDown}>▼</button>
       </div>
-      <button className="flex-1 text-left min-h-touch" onClick={onEdit}>
-        <span className="font-semibold">
-          {player.firstName} {player.lastNameInitial}
-        </span>
-        {player.jerseyNumber && <span className="text-slate-500 ml-2">#{player.jerseyNumber}</span>}
+      <button className="flex-1 text-left min-h-touch font-semibold" onClick={onEdit}>
+        {displayName(player)}
       </button>
       <button className="btn-secondary text-xs" onClick={onDeactivate}>Deactivate</button>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayerRecord } from "@/lib/offline/DataProvider";
-import { PlayerSeasonTotals, PositionGroup, emptyTotals } from "@/lib/types";
+import { displayName, PlayerSeasonTotals, PositionGroup, emptyTotals } from "@/lib/types";
 import { PositionGroupTally } from "./PositionGroupTally";
 
 export interface PickerCandidate {
@@ -63,8 +63,7 @@ export function PlayerPicker({
             >
               <div>
                 <p className="font-semibold">
-                  {player.firstName} {player.lastNameInitial}
-                  {player.jerseyNumber && <span className="text-slate-400 font-normal"> #{player.jerseyNumber}</span>}
+                  {displayName(player)}
                   {assignedElsewhereThisPeriod && (
                     <span className="ml-2 text-xs font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
                       already in this period
