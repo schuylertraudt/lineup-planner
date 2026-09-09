@@ -188,10 +188,25 @@ export default function SettingsPage() {
       {isOwner && (
         <div className="card p-4 space-y-3">
           <p className="font-semibold">Position slots (must total field size)</p>
+          <p className="text-xs text-slate-500 -mt-2">
+            Label (left) is what shows on the game plan screen. Group (right) is what counts toward fairness — it
+            follows the label until you customize the label yourself.
+          </p>
           {slotDraft.map((s, i) => (
             <div key={i} className="flex gap-2 items-center">
               <input className="input flex-1" value={s.name} onChange={(e) => updateSlot(i, { name: e.target.value })} />
-              <select className="input w-24" value={s.group} onChange={(e) => updateSlot(i, { group: e.target.value as PositionGroup })}>
+              <select
+                className="input w-24"
+                value={s.group}
+                onChange={(e) => {
+                  const newGroup = e.target.value as PositionGroup;
+                  // The label only auto-follows the dropdown while it still
+                  // matches the old group value — once someone types a
+                  // custom label (e.g. "CB"), changing the group again
+                  // won't silently overwrite it.
+                  updateSlot(i, { group: newGroup, name: s.name === s.group ? newGroup : s.name });
+                }}
+              >
                 <option value="GK">GK</option>
                 <option value="D">D</option>
                 <option value="M">M</option>
