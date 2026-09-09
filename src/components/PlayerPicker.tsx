@@ -58,21 +58,21 @@ export function PlayerPicker({
           {sorted.map(({ player, seasonTotals, gameTotals, assignedElsewhereThisPeriod }) => (
             <button
               key={player.id}
-              className="w-full text-left px-4 py-3 min-h-touch hover:bg-slate-50 flex items-center justify-between gap-2"
+              className="w-full text-left px-4 py-3 min-h-touch hover:bg-slate-50 flex flex-col gap-1"
               onClick={() => onSelect(player.id)}
             >
-              <div>
-                <p className="font-semibold">
-                  {displayName(player)}
-                  {assignedElsewhereThisPeriod && (
-                    <span className="ml-2 text-xs font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                      already in this period
-                    </span>
-                  )}
-                </p>
+              <p className="font-semibold">
+                {displayName(player)}
+                {assignedElsewhereThisPeriod && (
+                  <span className="ml-2 text-xs font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                    already in this period
+                  </span>
+                )}
+              </p>
+              <div className="flex items-center justify-between gap-2">
                 <PositionGroupTally totals={gameTotals} label="This game" />
+                <PositionGroupTally totals={seasonTotals ?? emptyTotals()} label="Season" />
               </div>
-              <PositionGroupTally totals={seasonTotals ?? emptyTotals()} label="Season" />
             </button>
           ))}
           {sorted.length === 0 && <p className="p-6 text-center text-slate-500">No available players.</p>}
