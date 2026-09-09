@@ -9,6 +9,8 @@ import {
   computeSeasonTotals,
   computeGamePlanCounts,
   computeGamePlanGroupTotals,
+  computeGameWarnings,
+  GameWarning,
   getAssignment,
   getPeriodAssignments,
 } from "@/lib/gameFairness";
@@ -64,6 +66,10 @@ export default function GamePage({ params }: { params: { id: string } }) {
   const gamePlanGroupTotals = useMemo(
     () => computeGamePlanGroupTotals(assignments, gameId, slots, isActual),
     [assignments, gameId, slots, isActual]
+  );
+  const gameWarnings = useMemo(
+    () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, isActual) : []),
+    [assignments, gameId, game, isActual]
   );
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;
@@ -320,6 +326,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
               gamePlanCounts={gamePlanCounts}
               gamePlanGroupTotals={gamePlanGroupTotals}
               seasonTotals={seasonTotals}
+              gameWarnings={gameWarnings}
               onSlotTap={(slotIndex) => setPicker({ periodNumber: selectedPeriod, slotIndex })}
             />
           )}
@@ -372,6 +379,7 @@ function PeriodEditor({
   gamePlanCounts,
   gamePlanGroupTotals,
   seasonTotals,
+  gameWarnings,
   onSlotTap,
 }: {
   periodNumber: number;
@@ -381,6 +389,7 @@ function PeriodEditor({
   isActual: boolean;
   players: { id: string; firstName: string; lastNameInitial: string; jerseyNumber: string }[];
   availablePlayerIds: string[];
+  gameWarnings: GameWarning[];
   gamePlanCounts: Record<string, number>;
   gamePlanGroupTotals: Record<string, PlayerSeasonTotals>;
   seasonTotals: Record<string, PlayerSeasonTotals>;
@@ -428,6 +437,31 @@ function PeriodEditor({
           </div>
         )}
       </div>
+
+      {gameWarnings.length > 0 && (
+        <div className="card p-3">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">Workload warnings</p>
+          <div className="space-y-2">
+            {gameWarnings.map((w) => {
+              const player = playerById(w.playerId);
+              if (!player) return null;
+              return (
+                <div
+                  key={w.playerId}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
+                    w.severity === "red" ? "bg-red-50 border border-red-200" : "bg-amber-50 border border-amber-200"
+                  }`}
+                >
+                  <span className="font-semibold text-sm">{displayName(player)}</span>
+                  <span className={`text-xs font-semibold ${w.severity === "red" ? "text-red-700" : "text-amber-700"}`}>
+                    {w.reasons.join(" · ")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="card p-3">
         <p className="text-xs font-bold text-slate-400 uppercase mb-2">Player totals</p>
