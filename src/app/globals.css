@@ -25,32 +25,46 @@ textarea {
   font-size: 1rem;
 }
 
-.btn {
-  @apply inline-flex items-center justify-center rounded-lg font-semibold min-h-touch min-w-touch px-4 py-2 select-none active:scale-[0.98] transition;
-}
+/*
+ * These custom classes are combined with plain Tailwind utilities in JSX
+ * all over the app (e.g. className="input w-24", className="btn-primary
+ * flex-1") expecting the utility to win when they conflict (that's the
+ * whole point of pairing a base style with a sizing override). Tailwind
+ * only guarantees utilities beat component classes for equal-specificity
+ * conflicts when the component classes are registered in the `components`
+ * layer — left as plain rules like this, they compile in after the
+ * utilities layer and silently override things like `w-24` or `flex-1`
+ * wherever they're combined. @layer here is what makes utility overrides
+ * actually take effect.
+ */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg font-semibold min-h-touch min-w-touch px-4 py-2 select-none active:scale-[0.98] transition;
+  }
 
-.btn-primary {
-  @apply btn bg-field text-white hover:bg-emerald-800 disabled:opacity-40 disabled:pointer-events-none;
-}
+  .btn-primary {
+    @apply btn bg-field text-white hover:bg-emerald-800 disabled:opacity-40 disabled:pointer-events-none;
+  }
 
-.btn-secondary {
-  @apply btn bg-white text-slate-800 border-2 border-slate-300 hover:bg-slate-100 disabled:opacity-40;
-}
+  .btn-secondary {
+    @apply btn bg-white text-slate-800 border-2 border-slate-300 hover:bg-slate-100 disabled:opacity-40;
+  }
 
-.btn-danger {
-  @apply btn bg-red-700 text-white hover:bg-red-800 disabled:opacity-40;
-}
+  .btn-danger {
+    @apply btn bg-red-700 text-white hover:bg-red-800 disabled:opacity-40;
+  }
 
-.card {
-  @apply bg-white rounded-xl shadow-sm border border-slate-200;
-}
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-slate-200;
+  }
 
-.input {
-  @apply w-full min-h-touch rounded-lg border-2 border-slate-300 px-3 py-2 text-slate-900 focus:border-field focus:outline-none;
-}
+  .input {
+    @apply w-full min-h-touch rounded-lg border-2 border-slate-300 px-3 py-2 text-slate-900 focus:border-field focus:outline-none;
+  }
 
-.label {
-  @apply block text-sm font-semibold text-slate-600 mb-1;
+  .label {
+    @apply block text-sm font-semibold text-slate-600 mb-1;
+  }
 }
 
 @media print {
