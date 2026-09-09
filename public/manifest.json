@@ -1,0 +1,16 @@
+{
+  "name": "Lineup Planner",
+  "short_name": "Lineup",
+  "description": "Fair, offline-first period lineup planning for rec soccer.",
+  "start_url": "/season",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b6b3a",
+  "theme_color": "#0b6b3a",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+  ]
+}
