@@ -70,15 +70,7 @@ export function PlayerPicker({
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-slate-500">
-                  This game: {gameTotals.periodsPlayed} period{gameTotals.periodsPlayed === 1 ? "" : "s"}
-                  {gameTotals.periodsPlayed > 0 && (
-                    <>
-                      {" · "}
-                      <PositionGroupTally totals={gameTotals} />
-                    </>
-                  )}
-                </p>
+                <PositionGroupTally totals={gameTotals} label="This game" />
               </div>
               <PositionGroupTally totals={seasonTotals ?? emptyTotals()} label="Season" />
             </button>
