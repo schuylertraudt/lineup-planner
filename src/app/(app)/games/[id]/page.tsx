@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useData, AssignmentRecord } from "@/lib/offline/DataProvider";
 import { setAssignment, setAvailability, setGamePeriodStatus, updateGame } from "@/lib/offline/actions";
-import { computeSeasonTotals, computeGamePlanCounts, getAssignment, getPeriodAssignments } from "@/lib/gameFairness";
+import {
+  computeSeasonTotals,
+  computeGamePlanCounts,
+  computeGamePlanGroupTotals,
+  getAssignment,
+  getPeriodAssignments,
+} from "@/lib/gameFairness";
 import { generatePlan } from "@/lib/autofill";
 import { displayName, emptyTotals, SlotTemplate } from "@/lib/types";
 import { PlayerPicker, PickerCandidate } from "@/components/PlayerPicker";
@@ -49,13 +55,20 @@ export default function GamePage({ params }: { params: { id: string } }) {
     () => computeSeasonTotals(assignments, slots, gamePeriods, availabilities, activePlayers.map((p) => p.id)),
     [assignments, slots, gamePeriods, availabilities, activePlayers]
   );
-  const gamePlanCounts = useMemo(() => computeGamePlanCounts(assignments, gameId), [assignments, gameId]);
+  const isActual = mode === "live";
+  const gamePlanCounts = useMemo(
+    () => computeGamePlanCounts(assignments, gameId, isActual),
+    [assignments, gameId, isActual]
+  );
+  const gamePlanGroupTotals = useMemo(
+    () => computeGamePlanGroupTotals(assignments, gameId, slots, isActual),
+    [assignments, gameId, slots, isActual]
+  );
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;
   if (!game) return <p className="p-6 text-slate-500">Game not found. It may still be syncing.</p>;
 
   const periodCount = game.periodCount;
-  const isActual = mode === "live";
 
   async function handleAvailabilityChange(playerId: string, status: "available" | "absent" | "late") {
     await setAvailability(mutate, gameId, playerId, status);
@@ -79,7 +92,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
       .map((player) => ({
         player,
         seasonTotals: seasonTotals[player.id] ?? emptyTotals(),
-        periodsThisGame: gamePlanCounts[player.id] ?? 0,
+        gameTotals: gamePlanGroupTotals[player.id] ?? emptyTotals(),
         assignedElsewhereThisPeriod: periodAssignments.some((a) => a.playerId === player.id && a.slotIndex !== excludeSlotIndex),
       }));
   }

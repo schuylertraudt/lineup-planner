@@ -7,7 +7,7 @@ import { PositionGroupTally } from "./PositionGroupTally";
 export interface PickerCandidate {
   player: PlayerRecord;
   seasonTotals: PlayerSeasonTotals;
-  periodsThisGame: number;
+  gameTotals: PlayerSeasonTotals;
   assignedElsewhereThisPeriod: boolean;
 }
 
@@ -33,7 +33,7 @@ export function PlayerPicker({
   const sorted = [...candidates].sort((a, b) => {
     const groupDiff = a.seasonTotals.groups[slotGroup] - b.seasonTotals.groups[slotGroup];
     if (groupDiff !== 0) return groupDiff;
-    const playedDiff = a.periodsThisGame - b.periodsThisGame;
+    const playedDiff = a.gameTotals.periodsPlayed - b.gameTotals.periodsPlayed;
     if (playedDiff !== 0) return playedDiff;
     return a.player.order - b.player.order;
   });
@@ -55,7 +55,7 @@ export function PlayerPicker({
           >
             Leave empty (bench)
           </button>
-          {sorted.map(({ player, seasonTotals, periodsThisGame, assignedElsewhereThisPeriod }) => (
+          {sorted.map(({ player, seasonTotals, gameTotals, assignedElsewhereThisPeriod }) => (
             <button
               key={player.id}
               className="w-full text-left px-4 py-3 min-h-touch hover:bg-slate-50 flex items-center justify-between gap-2"
@@ -70,9 +70,17 @@ export function PlayerPicker({
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-slate-500">This game: {periodsThisGame} period{periodsThisGame === 1 ? "" : "s"}</p>
+                <p className="text-xs text-slate-500">
+                  This game: {gameTotals.periodsPlayed} period{gameTotals.periodsPlayed === 1 ? "" : "s"}
+                  {gameTotals.periodsPlayed > 0 && (
+                    <>
+                      {" · "}
+                      <PositionGroupTally totals={gameTotals} />
+                    </>
+                  )}
+                </p>
               </div>
-              <PositionGroupTally totals={seasonTotals ?? emptyTotals()} />
+              <PositionGroupTally totals={seasonTotals ?? emptyTotals()} label="Season" />
             </button>
           ))}
           {sorted.length === 0 && <p className="p-6 text-center text-slate-500">No available players.</p>}

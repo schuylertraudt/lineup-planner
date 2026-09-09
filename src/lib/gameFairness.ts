@@ -49,14 +49,44 @@ export function computeSeasonTotals(
   return totals;
 }
 
-/** Periods played in the current game's plan (draft), per player. */
-export function computeGamePlanCounts(assignments: AssignmentRecord[], gameId: string): Record<string, number> {
+/** Periods played in the current game so far (plan or actual layer), per player. */
+export function computeGamePlanCounts(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  isActual = false
+): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const a of assignments) {
-    if (a.gameId !== gameId || a.isActual || !a.playerId) continue;
+    if (a.gameId !== gameId || a.isActual !== isActual || !a.playerId) continue;
     counts[a.playerId] = (counts[a.playerId] ?? 0) + 1;
   }
   return counts;
+}
+
+/**
+ * Position-group breakdown of the current game (plan or actual layer) so
+ * far, per player — e.g. so the picker can show "GK 1 · D 1 · M 1" for a
+ * player already placed in three different periods of the game being
+ * edited, not just a bare period count.
+ */
+export function computeGamePlanGroupTotals(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  slots: SlotRecord[],
+  isActual = false
+): Record<string, PlayerSeasonTotals> {
+  const totals: Record<string, PlayerSeasonTotals> = {};
+  for (const a of assignments) {
+    if (a.gameId !== gameId || a.isActual !== isActual || !a.playerId) continue;
+    const slot = slots.find((s) => s.order === a.slotIndex);
+    if (!slot) continue;
+    if (!totals[a.playerId]) totals[a.playerId] = emptyTotals();
+    const t = totals[a.playerId];
+    t.periodsPlayed += 1;
+    t.groups[slot.group as PositionGroup] += 1;
+    if (slot.group === "GK") t.gkPeriods += 1;
+  }
+  return totals;
 }
 
 export function getAssignment(
