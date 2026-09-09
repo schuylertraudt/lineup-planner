@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
-import { getAll, getMeta, getOutbox, putAll, setMeta } from "./db";
+import { deleteMany, getAll, getMeta, getOutbox, putAll, replaceAll, setMeta } from "./db";
 import { enqueueMutation, flushOutbox, pullFromServer, SyncStatus } from "./sync-manager";
 import { SyncEntity } from "@/lib/sync/types";
 
@@ -111,6 +111,8 @@ interface DataContextValue extends DataState {
   coachId: string;
   mutate: (entity: SyncEntity, entityId: string, fields: Record<string, unknown>) => Promise<void>;
   refresh: () => Promise<void>;
+  /** Deletes a game (and everything under it) on the server and purges it locally. Requires connectivity. */
+  deleteGame: (gameId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -226,15 +228,19 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       putAll("availabilities", availabilities),
       putAll("assignments", assignments),
       putAll("gamePeriods", gamePeriods),
-      putAll("coaches", result.coaches as CoachRecord[]),
+      // The server always returns its complete, current position-slot and
+      // coach lists (never a delta), so a full replace here is what keeps a
+      // slot template edit (which deletes and recreates every slot under
+      // new ids) from leaving orphaned old rows sitting in IndexedDB forever.
+      replaceAll("slots", result.slots as SlotRecord[]),
+      replaceAll("coaches", result.coaches as CoachRecord[]),
     ]);
     if (result.team) await putAll("team", [result.team]);
-    if ((result.slots as SlotRecord[]).length) await putAll("slots", result.slots as SlotRecord[]);
 
     setState((prev) => {
       let next = { ...prev };
       if (result.team) next.team = result.team as TeamRecord;
-      if ((result.slots as SlotRecord[]).length) next.slots = (result.slots as SlotRecord[]).sort((a, b) => a.order - b.order);
+      next.slots = (result.slots as SlotRecord[]).sort((a, b) => a.order - b.order);
       for (const p of players) next.players = upsertList(next.players, p);
       for (const g of games) next.games = upsertList(next.games, g);
       for (const a of availabilities) next.availabilities = upsertList(next.availabilities, a);
@@ -288,6 +294,40 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     await doFlush();
   }, [doPull, doFlush]);
 
+  const deleteGame = useCallback(async (gameId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/games/${gameId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error ?? "Delete failed." };
+      }
+    } catch {
+      return { ok: false, error: "Deleting a game requires an internet connection. Try again once you're online." };
+    }
+
+    const [availabilities, assignments, gamePeriods] = await Promise.all([
+      getAll<AvailabilityRecord>("availabilities"),
+      getAll<AssignmentRecord>("assignments"),
+      getAll<GamePeriodRecord>("gamePeriods"),
+    ]);
+    await Promise.all([
+      deleteMany("games", [gameId]),
+      deleteMany("availabilities", availabilities.filter((a) => a.gameId === gameId).map((a) => a.id)),
+      deleteMany("assignments", assignments.filter((a) => a.gameId === gameId).map((a) => a.id)),
+      deleteMany("gamePeriods", gamePeriods.filter((g) => g.gameId === gameId).map((g) => g.id)),
+    ]);
+
+    setState((prev) => ({
+      ...prev,
+      games: prev.games.filter((g) => g.id !== gameId),
+      availabilities: prev.availabilities.filter((a) => a.gameId !== gameId),
+      assignments: prev.assignments.filter((a) => a.gameId !== gameId),
+      gamePeriods: prev.gamePeriods.filter((g) => g.gameId !== gameId),
+    }));
+
+    return { ok: true };
+  }, []);
+
   useEffect(() => {
     (async () => {
       await loadFromIndexedDb();
@@ -322,7 +362,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
   }, [doFlush, doPull]);
 
   return (
-    <DataContext.Provider value={{ ...state, ready, syncStatus, pendingCount, coachId, mutate, refresh }}>
+    <DataContext.Provider value={{ ...state, ready, syncStatus, pendingCount, coachId, mutate, refresh, deleteGame }}>
       {children}
     </DataContext.Provider>
   );

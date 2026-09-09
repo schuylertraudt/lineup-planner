@@ -52,6 +52,30 @@ export async function putAll(store: string, items: unknown[]): Promise<void> {
   await tx.done;
 }
 
+/**
+ * Replaces the entire contents of a store with exactly these items. Use
+ * this for collections the server always returns as a complete, current
+ * snapshot (position slots, coaches) rather than a delta — a plain putAll
+ * would only ever add/update rows and never remove ones the server deleted
+ * (e.g. a position template edit deletes-and-recreates every slot with new
+ * ids), leaving stale rows to accumulate locally forever.
+ */
+export async function replaceAll(store: string, items: unknown[]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(store, "readwrite");
+  await tx.store.clear();
+  await Promise.all(items.map((item) => tx.store.put(item)));
+  await tx.done;
+}
+
+export async function deleteMany(store: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction(store, "readwrite");
+  await Promise.all(ids.map((id) => tx.store.delete(id)));
+  await tx.done;
+}
+
 export async function put(store: string, item: unknown): Promise<void> {
   const db = await getDb();
   await db.put(store, item);

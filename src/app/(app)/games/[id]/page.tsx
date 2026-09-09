@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useData, AssignmentRecord } from "@/lib/offline/DataProvider";
 import { setAssignment, setAvailability, setGamePeriodStatus, updateGame } from "@/lib/offline/actions";
 import { computeSeasonTotals, computeGamePlanCounts, getAssignment, getPeriodAssignments } from "@/lib/gameFairness";
@@ -13,10 +14,12 @@ type Mode = "plan" | "live";
 
 export default function GamePage({ params }: { params: { id: string } }) {
   const gameId = params.id;
-  const { games, players, slots, availabilities, assignments, gamePeriods, mutate, ready } = useData();
+  const router = useRouter();
+  const { games, players, slots, availabilities, assignments, gamePeriods, mutate, deleteGame, ready } = useData();
   const game = games.find((g) => g.id === gameId);
 
   const [mode, setMode] = useState<Mode>("plan");
+  const [deleting, setDeleting] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState(1);
   const [viewAll, setViewAll] = useState(false);
   const [picker, setPicker] = useState<{ periodNumber: number; slotIndex: number } | null>(null);
@@ -152,6 +155,19 @@ export default function GamePage({ params }: { params: { id: string } }) {
     await updateGame(mutate, gameId, { status: "final" });
   }
 
+  async function handleDeleteGame() {
+    const ok = window.confirm(`Delete the game vs ${game!.opponent}? This permanently removes its plan, live record, and report. This cannot be undone.`);
+    if (!ok) return;
+    setDeleting(true);
+    const result = await deleteGame(gameId);
+    setDeleting(false);
+    if (!result.ok) {
+      window.alert(result.error ?? "Delete failed.");
+      return;
+    }
+    router.push("/season");
+  }
+
   const periodStatus = (p: number) => gamePeriods.find((gp) => gp.gameId === gameId && gp.periodNumber === p)?.status ?? "planned";
 
   return (
@@ -164,7 +180,12 @@ export default function GamePage({ params }: { params: { id: string } }) {
             {game.location ? ` · ${game.location}` : ""} · {periodCount} periods
           </p>
         </div>
-        <Link href={`/games/${gameId}/report`} className="btn-secondary text-sm">Report</Link>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Link href={`/games/${gameId}/report`} className="btn-secondary text-sm">Report</Link>
+          <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleDeleteGame} disabled={deleting}>
+            {deleting ? "Deleting..." : "Delete game"}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2">
