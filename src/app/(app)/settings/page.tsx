@@ -13,7 +13,7 @@ interface Coach {
 }
 
 export default function SettingsPage() {
-  const { team, slots, mutate, coachId } = useData();
+  const { team, slots, mutate, coachId, refresh } = useData();
   const [myRole, setMyRole] = useState<string>("coach");
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [name, setName] = useState("");
@@ -68,6 +68,12 @@ export default function SettingsPage() {
       setMsg(data.error ?? "Could not save position template");
       return;
     }
+    // This PUT writes straight to the server, bypassing the offline sync
+    // queue entirely, so the shared slots list every other page reads from
+    // (games, fairness) won't reflect it until the next background pull —
+    // force that now instead of leaving the rest of the app stale for up to
+    // a minute.
+    await refresh();
     setMsg("Position template saved.");
     setTimeout(() => setMsg(""), 1500);
   }
@@ -77,14 +83,20 @@ export default function SettingsPage() {
     if (!ok) return;
     const res = await fetch("/api/team/join-code", { method: "POST" });
     const data = await res.json();
-    if (res.ok) setJoinCode(data.joinCode);
+    if (res.ok) {
+      setJoinCode(data.joinCode);
+      await refresh();
+    }
   }
 
   async function removeCoach(id: string) {
     const ok = window.confirm("Remove this coach's access to the team?");
     if (!ok) return;
     const res = await fetch(`/api/team/coaches/${id}`, { method: "DELETE" });
-    if (res.ok) setCoaches((prev) => prev.filter((c) => c.id !== id));
+    if (res.ok) {
+      setCoaches((prev) => prev.filter((c) => c.id !== id));
+      await refresh();
+    }
   }
 
   async function triggerReset(id: string) {
