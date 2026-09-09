@@ -13,8 +13,9 @@ import {
   getPeriodAssignments,
 } from "@/lib/gameFairness";
 import { generatePlan } from "@/lib/autofill";
-import { displayName, emptyTotals, SlotTemplate } from "@/lib/types";
+import { displayName, emptyTotals, PlayerSeasonTotals, SlotTemplate } from "@/lib/types";
 import { PlayerPicker, PickerCandidate } from "@/components/PlayerPicker";
+import { PositionGroupTally } from "@/components/PositionGroupTally";
 
 type Mode = "plan" | "live";
 
@@ -317,6 +318,8 @@ export default function GamePage({ params }: { params: { id: string } }) {
               players={activePlayers}
               availablePlayerIds={availablePlayerIds}
               gamePlanCounts={gamePlanCounts}
+              gamePlanGroupTotals={gamePlanGroupTotals}
+              seasonTotals={seasonTotals}
               onSlotTap={(slotIndex) => setPicker({ periodNumber: selectedPeriod, slotIndex })}
             />
           )}
@@ -367,6 +370,8 @@ function PeriodEditor({
   players,
   availablePlayerIds,
   gamePlanCounts,
+  gamePlanGroupTotals,
+  seasonTotals,
   onSlotTap,
 }: {
   periodNumber: number;
@@ -377,6 +382,8 @@ function PeriodEditor({
   players: { id: string; firstName: string; lastNameInitial: string; jerseyNumber: string }[];
   availablePlayerIds: string[];
   gamePlanCounts: Record<string, number>;
+  gamePlanGroupTotals: Record<string, PlayerSeasonTotals>;
+  seasonTotals: Record<string, PlayerSeasonTotals>;
   onSlotTap: (slotIndex: number) => void;
 }) {
   const playerById = (id: string | null) => (id ? players.find((p) => p.id === id) : undefined);
@@ -420,6 +427,25 @@ function PeriodEditor({
             ))}
           </div>
         )}
+      </div>
+
+      <div className="card p-3">
+        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Player totals</p>
+        <div className="divide-y divide-slate-100">
+          {availablePlayerIds.map((id) => {
+            const player = playerById(id);
+            if (!player) return null;
+            return (
+              <div key={id} className="py-2">
+                <p className="font-semibold text-sm">{displayName(player)}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <PositionGroupTally totals={gamePlanGroupTotals[id] ?? emptyTotals()} label="This game" />
+                  <PositionGroupTally totals={seasonTotals[id] ?? emptyTotals()} label="Season" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
