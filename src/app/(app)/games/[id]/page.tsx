@@ -68,8 +68,8 @@ export default function GamePage({ params }: { params: { id: string } }) {
     [assignments, gameId, slots, isActual]
   );
   const gameWarnings = useMemo(
-    () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, isActual) : []),
-    [assignments, gameId, game, isActual]
+    () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, isActual, availablePlayerIds, slots) : []),
+    [assignments, gameId, game, isActual, availablePlayerIds, slots]
   );
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;

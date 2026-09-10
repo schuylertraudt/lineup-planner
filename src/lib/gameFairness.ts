@@ -123,39 +123,101 @@ export function computeMaxConsecutivePeriods(
   return maxStreak;
 }
 
+/** Longest run of consecutive periods each available player spends benched (available, but unassigned), in this game/layer. */
+export function computeMaxConsecutiveBenchPeriods(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  periodCount: number,
+  isActual: boolean,
+  availablePlayerIds: string[]
+): Record<string, number> {
+  const benchedByPeriod: Set<string>[] = [];
+  for (let p = 1; p <= periodCount; p++) {
+    const playedIds = new Set(
+      assignments
+        .filter((a) => a.gameId === gameId && a.periodNumber === p && a.isActual === isActual && a.playerId)
+        .map((a) => a.playerId as string)
+    );
+    benchedByPeriod.push(new Set(availablePlayerIds.filter((id) => !playedIds.has(id))));
+  }
+
+  const maxStreak: Record<string, number> = {};
+  for (const id of availablePlayerIds) {
+    let current = 0;
+    let max = 0;
+    for (const periodSet of benchedByPeriod) {
+      current = periodSet.has(id) ? current + 1 : 0;
+      max = Math.max(max, current);
+    }
+    maxStreak[id] = max;
+  }
+  return maxStreak;
+}
+
+/** For each player, the non-GK position group they've been placed in most often this game, and how many times. */
+export function computeMaxPositionRepeats(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  slots: SlotRecord[],
+  isActual: boolean
+): Record<string, { group: PositionGroup; count: number }> {
+  const groupTotals = computeGamePlanGroupTotals(assignments, gameId, slots, isActual);
+  const result: Record<string, { group: PositionGroup; count: number }> = {};
+  for (const [playerId, totals] of Object.entries(groupTotals)) {
+    let best: { group: PositionGroup; count: number } = { group: "D", count: 0 };
+    for (const group of ["D", "M", "F"] as PositionGroup[]) {
+      if (totals.groups[group] > best.count) best = { group, count: totals.groups[group] };
+    }
+    result[playerId] = best;
+  }
+  return result;
+}
+
 export interface GameWarning {
   playerId: string;
   severity: "yellow" | "red";
   reasons: string[];
 }
 
+const GROUP_NAME: Record<PositionGroup, string> = { GK: "GK", D: "defense", M: "midfield", F: "forward" };
+
 /**
- * Workload flags for the game currently being edited: back-to-back periods
- * with no rest, and a high total period count. Red is the more severe
- * threshold for each and always wins if both apply.
+ * Workload and variety flags for the game currently being edited. Each
+ * check independently escalates a player to yellow or red; red always wins
+ * when multiple checks fire, but every triggered reason is listed.
  */
 export function computeGameWarnings(
   assignments: AssignmentRecord[],
   gameId: string,
   periodCount: number,
-  isActual: boolean
+  isActual: boolean,
+  availablePlayerIds: string[],
+  slots: SlotRecord[]
 ): GameWarning[] {
   const playedCounts = computeGamePlanCounts(assignments, gameId, isActual);
-  const maxConsecutive = computeMaxConsecutivePeriods(assignments, gameId, periodCount, isActual);
+  const maxPlayStreak = computeMaxConsecutivePeriods(assignments, gameId, periodCount, isActual);
+  const maxBenchStreak = computeMaxConsecutiveBenchPeriods(assignments, gameId, periodCount, isActual, availablePlayerIds);
+  const maxPositionRepeat = computeMaxPositionRepeats(assignments, gameId, slots, isActual);
 
-  const allPlayerIds = new Set([...Object.keys(playedCounts), ...Object.keys(maxConsecutive)]);
+  const allPlayerIds = new Set([
+    ...Object.keys(playedCounts),
+    ...Object.keys(maxPlayStreak),
+    ...availablePlayerIds,
+  ]);
   const warnings: GameWarning[] = [];
 
   for (const playerId of allPlayerIds) {
     const played = playedCounts[playerId] ?? 0;
-    const streak = maxConsecutive[playerId] ?? 0;
+    const playStreak = maxPlayStreak[playerId] ?? 0;
+    const benchStreak = maxBenchStreak[playerId] ?? 0;
+    const positionRepeat = maxPositionRepeat[playerId] ?? { group: "D" as PositionGroup, count: 0 };
     const reasons: string[] = [];
     let severity: "yellow" | "red" | null = null;
 
-    if (streak >= 3) {
+    if (playStreak >= 3) {
       severity = "red";
-      reasons.push(`${streak} periods in a row`);
-    } else if (streak === 2) {
+      reasons.push(`${playStreak} periods in a row`);
+    } else if (playStreak === 2) {
       severity = "yellow";
       reasons.push("back-to-back periods");
     }
@@ -166,6 +228,22 @@ export function computeGameWarnings(
     } else if (played > 3) {
       if (severity !== "red") severity = "yellow";
       reasons.push(`${played} periods this game`);
+    }
+
+    if (benchStreak > 3) {
+      severity = "red";
+      reasons.push(`benched ${benchStreak} periods in a row`);
+    } else if (benchStreak > 2) {
+      if (severity !== "red") severity = "yellow";
+      reasons.push(`benched ${benchStreak} periods in a row`);
+    }
+
+    if (positionRepeat.count >= 3) {
+      severity = "red";
+      reasons.push(`${GROUP_NAME[positionRepeat.group]} ${positionRepeat.count} times`);
+    } else if (positionRepeat.count === 2) {
+      if (severity !== "red") severity = "yellow";
+      reasons.push(`${GROUP_NAME[positionRepeat.group]} twice`);
     }
 
     if (severity) warnings.push({ playerId, severity, reasons });
