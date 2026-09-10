@@ -11,6 +11,7 @@ import {
   computeGamePlanGroupTotals,
   computeGameWarnings,
   computeSwapSuggestions,
+  computeWarningIfAssigned,
   GameWarning,
   SwapSuggestion,
   getAssignment,
@@ -116,6 +117,17 @@ export default function GamePage({ params }: { params: { id: string } }) {
         seasonTotals: seasonTotals[player.id] ?? emptyTotals(),
         gameTotals: gamePlanGroupTotals[player.id] ?? emptyTotals(),
         assignedElsewhereThisPeriod: periodAssignments.some((a) => a.playerId === player.id && a.slotIndex !== excludeSlotIndex),
+        resultingWarning: computeWarningIfAssigned(
+          assignments,
+          gameId,
+          periodCount,
+          isActual,
+          availablePlayerIds,
+          slots,
+          periodNumber,
+          excludeSlotIndex,
+          player.id
+        ),
       }));
   }
 

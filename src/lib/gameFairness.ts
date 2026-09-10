@@ -181,6 +181,95 @@ export interface GameWarning {
 
 const GROUP_NAME: Record<PositionGroup, string> = { GK: "GK", D: "defense", M: "midfield", F: "forward" };
 
+type FlagSeverity = "none" | "yellow" | "red";
+const SEVERITY_RANK: Record<FlagSeverity, number> = { none: 0, yellow: 1, red: 2 };
+
+export type FlagCategory = "playStreak" | "totalPlayed" | "benchStreak" | "positionRepeat";
+
+interface CategoryFlag {
+  category: FlagCategory;
+  severity: FlagSeverity;
+  text: string;
+}
+
+/**
+ * The four independent workload/variety checks for one player, each
+ * resolved on its own scale (none/yellow/red) with fixed category keys so
+ * before/after states can be compared category-by-category rather than by
+ * matching display text (which embeds counts that change even when a
+ * category's severity doesn't — e.g. "benched 4 in a row" improving to
+ * "benched 3 in a row" is still the same still-flagged category, not a new
+ * problem).
+ */
+function classifyPlayerFlags(
+  playedCounts: Record<string, number>,
+  maxPlayStreak: Record<string, number>,
+  maxBenchStreak: Record<string, number>,
+  maxPositionRepeat: Record<string, { group: PositionGroup; count: number }>,
+  playerId: string
+): CategoryFlag[] {
+  const played = playedCounts[playerId] ?? 0;
+  const playStreak = maxPlayStreak[playerId] ?? 0;
+  const benchStreak = maxBenchStreak[playerId] ?? 0;
+  const positionRepeat = maxPositionRepeat[playerId] ?? { group: "D" as PositionGroup, count: 0 };
+
+  const flags: CategoryFlag[] = [];
+
+  if (playStreak >= 3) {
+    flags.push({ category: "playStreak", severity: "red", text: `${playStreak} periods in a row` });
+  } else if (playStreak === 2) {
+    flags.push({ category: "playStreak", severity: "yellow", text: "back-to-back periods" });
+  } else {
+    flags.push({ category: "playStreak", severity: "none", text: "" });
+  }
+
+  if (played > 4) {
+    flags.push({ category: "totalPlayed", severity: "red", text: `${played} periods this game` });
+  } else if (played > 3) {
+    flags.push({ category: "totalPlayed", severity: "yellow", text: `${played} periods this game` });
+  } else {
+    flags.push({ category: "totalPlayed", severity: "none", text: "" });
+  }
+
+  if (benchStreak > 3) {
+    flags.push({ category: "benchStreak", severity: "red", text: `benched ${benchStreak} periods in a row` });
+  } else if (benchStreak > 2) {
+    flags.push({ category: "benchStreak", severity: "yellow", text: `benched ${benchStreak} periods in a row` });
+  } else {
+    flags.push({ category: "benchStreak", severity: "none", text: "" });
+  }
+
+  if (positionRepeat.count >= 3) {
+    flags.push({
+      category: "positionRepeat",
+      severity: "red",
+      text: `${GROUP_NAME[positionRepeat.group]} ${positionRepeat.count} times`,
+    });
+  } else if (positionRepeat.count === 2) {
+    flags.push({ category: "positionRepeat", severity: "yellow", text: `${GROUP_NAME[positionRepeat.group]} twice` });
+  } else {
+    flags.push({ category: "positionRepeat", severity: "none", text: "" });
+  }
+
+  return flags;
+}
+
+function buildInputs(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  periodCount: number,
+  isActual: boolean,
+  availablePlayerIds: string[],
+  slots: SlotRecord[]
+) {
+  return {
+    playedCounts: computeGamePlanCounts(assignments, gameId, isActual),
+    maxPlayStreak: computeMaxConsecutivePeriods(assignments, gameId, periodCount, isActual),
+    maxBenchStreak: computeMaxConsecutiveBenchPeriods(assignments, gameId, periodCount, isActual, availablePlayerIds),
+    maxPositionRepeat: computeMaxPositionRepeats(assignments, gameId, slots, isActual),
+  };
+}
+
 /**
  * Workload and variety flags for the game currently being edited. Each
  * check independently escalates a player to yellow or red; red always wins
@@ -194,59 +283,26 @@ export function computeGameWarnings(
   availablePlayerIds: string[],
   slots: SlotRecord[]
 ): GameWarning[] {
-  const playedCounts = computeGamePlanCounts(assignments, gameId, isActual);
-  const maxPlayStreak = computeMaxConsecutivePeriods(assignments, gameId, periodCount, isActual);
-  const maxBenchStreak = computeMaxConsecutiveBenchPeriods(assignments, gameId, periodCount, isActual, availablePlayerIds);
-  const maxPositionRepeat = computeMaxPositionRepeats(assignments, gameId, slots, isActual);
-
+  const inputs = buildInputs(assignments, gameId, periodCount, isActual, availablePlayerIds, slots);
   const allPlayerIds = new Set([
-    ...Object.keys(playedCounts),
-    ...Object.keys(maxPlayStreak),
+    ...Object.keys(inputs.playedCounts),
+    ...Object.keys(inputs.maxPlayStreak),
     ...availablePlayerIds,
   ]);
   const warnings: GameWarning[] = [];
 
   for (const playerId of allPlayerIds) {
-    const played = playedCounts[playerId] ?? 0;
-    const playStreak = maxPlayStreak[playerId] ?? 0;
-    const benchStreak = maxBenchStreak[playerId] ?? 0;
-    const positionRepeat = maxPositionRepeat[playerId] ?? { group: "D" as PositionGroup, count: 0 };
-    const reasons: string[] = [];
-    let severity: "yellow" | "red" | null = null;
+    const flags = classifyPlayerFlags(
+      inputs.playedCounts,
+      inputs.maxPlayStreak,
+      inputs.maxBenchStreak,
+      inputs.maxPositionRepeat,
+      playerId
+    ).filter((f) => f.severity !== "none");
+    if (flags.length === 0) continue;
 
-    if (playStreak >= 3) {
-      severity = "red";
-      reasons.push(`${playStreak} periods in a row`);
-    } else if (playStreak === 2) {
-      severity = "yellow";
-      reasons.push("back-to-back periods");
-    }
-
-    if (played > 4) {
-      severity = "red";
-      reasons.push(`${played} periods this game`);
-    } else if (played > 3) {
-      if (severity !== "red") severity = "yellow";
-      reasons.push(`${played} periods this game`);
-    }
-
-    if (benchStreak > 3) {
-      severity = "red";
-      reasons.push(`benched ${benchStreak} periods in a row`);
-    } else if (benchStreak > 2) {
-      if (severity !== "red") severity = "yellow";
-      reasons.push(`benched ${benchStreak} periods in a row`);
-    }
-
-    if (positionRepeat.count >= 3) {
-      severity = "red";
-      reasons.push(`${GROUP_NAME[positionRepeat.group]} ${positionRepeat.count} times`);
-    } else if (positionRepeat.count === 2) {
-      if (severity !== "red") severity = "yellow";
-      reasons.push(`${GROUP_NAME[positionRepeat.group]} twice`);
-    }
-
-    if (severity) warnings.push({ playerId, severity, reasons });
+    const severity: "yellow" | "red" = flags.some((f) => f.severity === "red") ? "red" : "yellow";
+    warnings.push({ playerId, severity, reasons: flags.map((f) => f.text) });
   }
 
   return warnings.sort((a, b) => {
@@ -259,7 +315,7 @@ function warningScore(warnings: GameWarning[]): number {
   return warnings.reduce((sum, w) => sum + (w.severity === "red" ? 100 : 10), 0);
 }
 
-function applyVirtualChanges(
+export function applyVirtualChanges(
   assignments: AssignmentRecord[],
   gameId: string,
   isActual: boolean,
@@ -289,6 +345,61 @@ function applyVirtualChanges(
     }
   }
   return result;
+}
+
+/**
+ * What NEW or worsened warning (if any) placing this player in this
+ * slot/period would cause, compared to their current state without that
+ * change — for flagging a candidate in the assignment picker before the
+ * coach commits to them. Compares category-by-category (play streak, total
+ * played, bench streak, position repeat) rather than by matching display
+ * text, since text embeds counts that shift even when a category's
+ * severity doesn't improve (e.g. "benched 4 in a row" easing to "benched 3
+ * in a row" is still the same already-flagged category, not a new
+ * problem) — and conversely surfaces a category escalating from yellow to
+ * red as new, even though some text would otherwise overlap.
+ */
+export function computeWarningIfAssigned(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  periodCount: number,
+  isActual: boolean,
+  availablePlayerIds: string[],
+  slots: SlotRecord[],
+  periodNumber: number,
+  slotIndex: number,
+  playerId: string
+): GameWarning | undefined {
+  const before = buildInputs(assignments, gameId, periodCount, isActual, availablePlayerIds, slots);
+  const beforeFlags = classifyPlayerFlags(
+    before.playedCounts,
+    before.maxPlayStreak,
+    before.maxBenchStreak,
+    before.maxPositionRepeat,
+    playerId
+  );
+
+  const virtual = applyVirtualChanges(assignments, gameId, isActual, [{ periodNumber, slotIndex, playerId }]);
+  const after = buildInputs(virtual, gameId, periodCount, isActual, availablePlayerIds, slots);
+  const afterFlags = classifyPlayerFlags(
+    after.playedCounts,
+    after.maxPlayStreak,
+    after.maxBenchStreak,
+    after.maxPositionRepeat,
+    playerId
+  );
+
+  const newReasons: string[] = [];
+  let severity: FlagSeverity = "none";
+  for (let i = 0; i < afterFlags.length; i++) {
+    if (SEVERITY_RANK[afterFlags[i].severity] > SEVERITY_RANK[beforeFlags[i].severity]) {
+      newReasons.push(afterFlags[i].text);
+      if (SEVERITY_RANK[afterFlags[i].severity] > SEVERITY_RANK[severity]) severity = afterFlags[i].severity;
+    }
+  }
+
+  if (newReasons.length === 0 || severity === "none") return undefined;
+  return { playerId, severity, reasons: newReasons };
 }
 
 export interface SwapSuggestion {

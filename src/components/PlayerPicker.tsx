@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayerRecord } from "@/lib/offline/DataProvider";
+import { GameWarning } from "@/lib/gameFairness";
 import { displayName, PlayerSeasonTotals, PositionGroup, emptyTotals } from "@/lib/types";
 import { PositionGroupTally } from "./PositionGroupTally";
 
@@ -9,6 +10,8 @@ export interface PickerCandidate {
   seasonTotals: PlayerSeasonTotals;
   gameTotals: PlayerSeasonTotals;
   assignedElsewhereThisPeriod: boolean;
+  /** The warning (if any) this player would end up with if placed here — computed against a hypothetical plan, not the real one. */
+  resultingWarning?: GameWarning;
 }
 
 export function PlayerPicker({
@@ -55,7 +58,7 @@ export function PlayerPicker({
           >
             Leave empty (bench)
           </button>
-          {sorted.map(({ player, seasonTotals, gameTotals, assignedElsewhereThisPeriod }) => (
+          {sorted.map(({ player, seasonTotals, gameTotals, assignedElsewhereThisPeriod, resultingWarning }) => (
             <button
               key={player.id}
               className="w-full text-left px-4 py-3 min-h-touch hover:bg-slate-50 flex flex-col gap-1"
@@ -66,6 +69,16 @@ export function PlayerPicker({
                 {assignedElsewhereThisPeriod && (
                   <span className="ml-2 text-xs font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
                     already in this period
+                  </span>
+                )}
+                {resultingWarning && (
+                  <span
+                    className={`ml-2 text-xs font-bold px-1.5 py-0.5 rounded ${
+                      resultingWarning.severity === "red" ? "text-red-700 bg-red-100" : "text-amber-700 bg-amber-100"
+                    }`}
+                    title={resultingWarning.reasons.join(" · ")}
+                  >
+                    🚩 {resultingWarning.reasons.join(" · ")}
                   </span>
                 )}
               </p>
