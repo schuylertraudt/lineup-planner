@@ -3,13 +3,13 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "Lineup Planner",
+  title: "Lineup Keeper",
   description: "Fair, offline-first period lineup planning for rec soccer.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Lineup Planner",
+    title: "Lineup Keeper",
   },
   icons: {
     icon: [

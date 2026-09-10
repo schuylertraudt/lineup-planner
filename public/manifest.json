@@ -1,6 +1,6 @@
 {
-  "name": "Lineup Planner",
-  "short_name": "Lineup",
+  "name": "Lineup Keeper",
+  "short_name": "Lineup Keeper",
   "description": "Fair, offline-first period lineup planning for rec soccer.",
   "start_url": "/season",
   "scope": "/",
