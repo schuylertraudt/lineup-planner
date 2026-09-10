@@ -1,5 +1,5 @@
-import { AssignmentRecord, AvailabilityRecord, GamePeriodRecord, SlotRecord } from "@/lib/offline/DataProvider";
-import { emptyTotals, PlayerSeasonTotals, PositionGroup } from "@/lib/types";
+import { AssignmentRecord, AvailabilityRecord, GamePeriodRecord, PlayerRecord, SlotRecord } from "@/lib/offline/DataProvider";
+import { displayName, emptyTotals, PlayerSeasonTotals, PositionGroup } from "@/lib/types";
 
 /**
  * Season-to-date totals from ACTUAL (frozen/live) assignments across every
@@ -253,6 +253,155 @@ export function computeGameWarnings(
     if (a.severity !== b.severity) return a.severity === "red" ? -1 : 1;
     return 0;
   });
+}
+
+function warningScore(warnings: GameWarning[]): number {
+  return warnings.reduce((sum, w) => sum + (w.severity === "red" ? 100 : 10), 0);
+}
+
+function applyVirtualChanges(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  isActual: boolean,
+  changes: { periodNumber: number; slotIndex: number; playerId: string | null }[]
+): AssignmentRecord[] {
+  const result = assignments.map((a) => ({ ...a }));
+  for (const change of changes) {
+    const existing = result.find(
+      (a) =>
+        a.gameId === gameId &&
+        a.isActual === isActual &&
+        a.periodNumber === change.periodNumber &&
+        a.slotIndex === change.slotIndex
+    );
+    if (existing) {
+      existing.playerId = change.playerId;
+    } else {
+      result.push({
+        id: `virtual:${gameId}:${change.periodNumber}:${change.slotIndex}:${isActual}`,
+        gameId,
+        periodNumber: change.periodNumber,
+        slotIndex: change.slotIndex,
+        playerId: change.playerId,
+        isActual,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+  return result;
+}
+
+export interface SwapSuggestion {
+  id: string;
+  description: string;
+  changes: { periodNumber: number; slotIndex: number; playerId: string | null }[];
+  scoreBefore: number;
+  scoreAfter: number;
+}
+
+/**
+ * Proposes slot swaps within a single period — either two assigned players
+ * trading slots, or an assigned player trading places with someone on the
+ * bench — that strictly reduce the total warning score (red=100, yellow=10)
+ * with nothing new appearing elsewhere. Never auto-applies; the caller
+ * turns `changes` into actual assignment writes only if the coach accepts.
+ */
+export function computeSwapSuggestions(
+  assignments: AssignmentRecord[],
+  gameId: string,
+  periodCount: number,
+  isActual: boolean,
+  availablePlayerIds: string[],
+  slots: SlotRecord[],
+  players: Pick<PlayerRecord, "id" | "firstName" | "lastNameInitial" | "jerseyNumber">[],
+  maxSuggestions = 3
+): SwapSuggestion[] {
+  const nameOf = (id: string) => {
+    const p = players.find((x) => x.id === id);
+    return p ? displayName(p) : "?";
+  };
+  const slotByIndex = new Map(slots.map((s) => [s.order, s] as const));
+
+  const baseScore = warningScore(computeGameWarnings(assignments, gameId, periodCount, isActual, availablePlayerIds, slots));
+  if (baseScore === 0) return [];
+
+  const candidates: SwapSuggestion[] = [];
+
+  for (let p = 1; p <= periodCount; p++) {
+    const assignedBySlot = new Map<number, string>();
+    for (const a of assignments) {
+      if (a.gameId === gameId && a.periodNumber === p && a.isActual === isActual && a.playerId) {
+        assignedBySlot.set(a.slotIndex, a.playerId);
+      }
+    }
+    const assignedPlayerIds = new Set(assignedBySlot.values());
+    const benched = availablePlayerIds.filter((id) => !assignedPlayerIds.has(id));
+    const slotIndexes = [...assignedBySlot.keys()];
+
+    for (let x = 0; x < slotIndexes.length; x++) {
+      for (let y = x + 1; y < slotIndexes.length; y++) {
+        const slotA = slotIndexes[x];
+        const slotB = slotIndexes[y];
+        const playerA = assignedBySlot.get(slotA)!;
+        const playerB = assignedBySlot.get(slotB)!;
+        const changes = [
+          { periodNumber: p, slotIndex: slotA, playerId: playerB },
+          { periodNumber: p, slotIndex: slotB, playerId: playerA },
+        ];
+        const afterScore = warningScore(
+          computeGameWarnings(
+            applyVirtualChanges(assignments, gameId, isActual, changes),
+            gameId,
+            periodCount,
+            isActual,
+            availablePlayerIds,
+            slots
+          )
+        );
+        if (afterScore < baseScore) {
+          const groupA = slotByIndex.get(slotA)?.name ?? "?";
+          const groupB = slotByIndex.get(slotB)?.name ?? "?";
+          candidates.push({
+            id: `swap:${p}:${slotA}:${slotB}`,
+            description: `P${p}: swap ${nameOf(playerA)} (${groupA}) with ${nameOf(playerB)} (${groupB})`,
+            changes,
+            scoreBefore: baseScore,
+            scoreAfter: afterScore,
+          });
+        }
+      }
+    }
+
+    for (const slotIdx of slotIndexes) {
+      const playerA = assignedBySlot.get(slotIdx)!;
+      for (const playerB of benched) {
+        const changes = [{ periodNumber: p, slotIndex: slotIdx, playerId: playerB }];
+        const afterScore = warningScore(
+          computeGameWarnings(
+            applyVirtualChanges(assignments, gameId, isActual, changes),
+            gameId,
+            periodCount,
+            isActual,
+            availablePlayerIds,
+            slots
+          )
+        );
+        if (afterScore < baseScore) {
+          const slotName = slotByIndex.get(slotIdx)?.name ?? "?";
+          candidates.push({
+            id: `bench-swap:${p}:${slotIdx}:${playerB}`,
+            description: `P${p}: bench ${nameOf(playerA)}, play ${nameOf(playerB)} at ${slotName}`,
+            changes,
+            scoreBefore: baseScore,
+            scoreAfter: afterScore,
+          });
+        }
+      }
+    }
+  }
+
+  candidates.sort((a, b) => a.scoreAfter - b.scoreAfter);
+  return candidates.slice(0, maxSuggestions);
 }
 
 export function getAssignment(

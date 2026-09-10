@@ -10,7 +10,9 @@ import {
   computeGamePlanCounts,
   computeGamePlanGroupTotals,
   computeGameWarnings,
+  computeSwapSuggestions,
   GameWarning,
+  SwapSuggestion,
   getAssignment,
   getPeriodAssignments,
 } from "@/lib/gameFairness";
@@ -71,6 +73,19 @@ export default function GamePage({ params }: { params: { id: string } }) {
     () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, isActual, availablePlayerIds, slots) : []),
     [assignments, gameId, game, isActual, availablePlayerIds, slots]
   );
+  const swapSuggestions = useMemo(
+    () =>
+      game
+        ? computeSwapSuggestions(assignments, gameId, game.periodCount, isActual, availablePlayerIds, slots, activePlayers)
+        : [],
+    [assignments, gameId, game, isActual, availablePlayerIds, slots, activePlayers]
+  );
+
+  async function applySuggestion(suggestion: SwapSuggestion) {
+    for (const change of suggestion.changes) {
+      await setAssignment(mutate, gameId, change.periodNumber, change.slotIndex, change.playerId, isActual);
+    }
+  }
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;
   if (!game) return <p className="p-6 text-slate-500">Game not found. It may still be syncing.</p>;
@@ -327,6 +342,8 @@ export default function GamePage({ params }: { params: { id: string } }) {
               gamePlanGroupTotals={gamePlanGroupTotals}
               seasonTotals={seasonTotals}
               gameWarnings={gameWarnings}
+              swapSuggestions={swapSuggestions}
+              onApplySuggestion={applySuggestion}
               onSlotTap={(slotIndex) => setPicker({ periodNumber: selectedPeriod, slotIndex })}
             />
           )}
@@ -380,6 +397,8 @@ function PeriodEditor({
   gamePlanGroupTotals,
   seasonTotals,
   gameWarnings,
+  swapSuggestions,
+  onApplySuggestion,
   onSlotTap,
 }: {
   periodNumber: number;
@@ -390,11 +409,15 @@ function PeriodEditor({
   players: { id: string; firstName: string; lastNameInitial: string; jerseyNumber: string }[];
   availablePlayerIds: string[];
   gameWarnings: GameWarning[];
+  swapSuggestions: SwapSuggestion[];
+  onApplySuggestion: (suggestion: SwapSuggestion) => void;
   gamePlanCounts: Record<string, number>;
   gamePlanGroupTotals: Record<string, PlayerSeasonTotals>;
   seasonTotals: Record<string, PlayerSeasonTotals>;
   onSlotTap: (slotIndex: number) => void;
 }) {
+  const [showWarnings, setShowWarnings] = useState(true);
+  const [showTotals, setShowTotals] = useState(false);
   const playerById = (id: string | null) => (id ? players.find((p) => p.id === id) : undefined);
   const assignedIds = new Set(
     getPeriodAssignments(assignments, gameId, periodNumber, isActual)
@@ -439,47 +462,70 @@ function PeriodEditor({
       </div>
 
       {gameWarnings.length > 0 && (
-        <div className="card p-3">
-          <p className="text-xs font-bold text-slate-400 uppercase mb-2">Workload warnings</p>
-          <div className="space-y-2">
-            {gameWarnings.map((w) => {
-              const player = playerById(w.playerId);
+        <div className="card">
+          <button className="w-full flex items-center justify-between p-3 min-h-touch" onClick={() => setShowWarnings((v) => !v)}>
+            <span className="font-semibold">Workload warnings ({gameWarnings.length})</span>
+            <span className="text-slate-400 text-sm">{showWarnings ? "Hide" : "Show"}</span>
+          </button>
+          {showWarnings && (
+            <div className="border-t border-slate-200 p-3 space-y-2">
+              {gameWarnings.map((w) => {
+                const player = playerById(w.playerId);
+                if (!player) return null;
+                return (
+                  <div
+                    key={w.playerId}
+                    className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
+                      w.severity === "red" ? "bg-red-50 border border-red-200" : "bg-amber-50 border border-amber-200"
+                    }`}
+                  >
+                    <span className="font-semibold text-sm">{displayName(player)}</span>
+                    <span className={`text-xs font-semibold ${w.severity === "red" ? "text-red-700" : "text-amber-700"}`}>
+                      {w.reasons.join(" · ")}
+                    </span>
+                  </div>
+                );
+              })}
+              {swapSuggestions.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-slate-200 space-y-2">
+                  <p className="text-xs font-bold text-slate-400 uppercase">Suggested fixes</p>
+                  {swapSuggestions.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-sky-50 border border-sky-200">
+                      <span className="text-sm text-sky-900">{s.description}</span>
+                      <button className="btn-secondary !min-h-0 px-2 py-1 text-xs shrink-0" onClick={() => onApplySuggestion(s)}>
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="card">
+        <button className="w-full flex items-center justify-between p-3 min-h-touch" onClick={() => setShowTotals((v) => !v)}>
+          <span className="font-semibold">Player totals</span>
+          <span className="text-slate-400 text-sm">{showTotals ? "Hide" : "Show"}</span>
+        </button>
+        {showTotals && (
+          <div className="border-t border-slate-200 p-3 divide-y divide-slate-100">
+            {availablePlayerIds.map((id) => {
+              const player = playerById(id);
               if (!player) return null;
               return (
-                <div
-                  key={w.playerId}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
-                    w.severity === "red" ? "bg-red-50 border border-red-200" : "bg-amber-50 border border-amber-200"
-                  }`}
-                >
-                  <span className="font-semibold text-sm">{displayName(player)}</span>
-                  <span className={`text-xs font-semibold ${w.severity === "red" ? "text-red-700" : "text-amber-700"}`}>
-                    {w.reasons.join(" · ")}
-                  </span>
+                <div key={id} className="py-2">
+                  <p className="font-semibold text-sm">{displayName(player)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <PositionGroupTally totals={gamePlanGroupTotals[id] ?? emptyTotals()} label="This game" />
+                    <PositionGroupTally totals={seasonTotals[id] ?? emptyTotals()} label="Season" />
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      <div className="card p-3">
-        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Player totals</p>
-        <div className="divide-y divide-slate-100">
-          {availablePlayerIds.map((id) => {
-            const player = playerById(id);
-            if (!player) return null;
-            return (
-              <div key={id} className="py-2">
-                <p className="font-semibold text-sm">{displayName(player)}</p>
-                <div className="flex items-center justify-between gap-2">
-                  <PositionGroupTally totals={gamePlanGroupTotals[id] ?? emptyTotals()} label="This game" />
-                  <PositionGroupTally totals={seasonTotals[id] ?? emptyTotals()} label="Season" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        )}
       </div>
     </div>
   );
