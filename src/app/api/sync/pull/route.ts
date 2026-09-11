@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
       gamePeriods,
       coaches,
       drills,
-      drillArchives,
       practicePlans,
       practiceBlocks,
       practiceAttendances,
@@ -40,11 +39,7 @@ export async function GET(req: NextRequest) {
         where: { teamId: coach.teamId },
         select: { id: true, name: true, email: true, role: true },
       }),
-      prisma.drill.findMany({
-        where: { OR: [{ teamId: coach.teamId }, { scope: "library" }], updatedAt: { gt: sinceDate } },
-      }),
-      // DrillArchive uses replace-all semantics (deletions can't be represented incrementally).
-      prisma.drillArchive.findMany({ where: { teamId: coach.teamId } }),
+      prisma.drill.findMany({ where: { teamId: coach.teamId, updatedAt: { gt: sinceDate } } }),
       prisma.practicePlan.findMany({ where: { teamId: coach.teamId, updatedAt: { gt: sinceDate } } }),
       prisma.practiceBlock.findMany({
         where: { updatedAt: { gt: sinceDate }, plan: { teamId: coach.teamId } },
@@ -65,7 +60,6 @@ export async function GET(req: NextRequest) {
       gamePeriods,
       coaches,
       drills,
-      drillArchives,
       practicePlans,
       practiceBlocks,
       practiceAttendances,

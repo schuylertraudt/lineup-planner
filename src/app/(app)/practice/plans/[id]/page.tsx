@@ -28,7 +28,7 @@ const BREAK_PRESETS = [1, 2, 3];
 
 export default function PracticePlanBuilderPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { team, players, drills, drillArchives, practicePlans, practiceBlocks, practiceAttendances, mutate, deletePracticePlan, ready } =
+  const { team, players, drills, practicePlans, practiceBlocks, practiceAttendances, mutate, deletePracticePlan, ready } =
     useData();
   const plan = practicePlans.find((p) => p.id === params.id);
   const [pickingDrill, setPickingDrill] = useState(false);
@@ -291,7 +291,7 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
 
         {pickingDrill && (
           <div className="pt-2 border-t border-slate-200">
-            <DrillPicker drills={visibleDrills(drills, drillArchives, team.id)} onPick={addDrill} />
+            <DrillPicker drills={visibleDrills(drills, team.id)} onPick={addDrill} />
           </div>
         )}
       </div>

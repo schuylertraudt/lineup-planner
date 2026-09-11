@@ -4,21 +4,20 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useData } from "@/lib/offline/DataProvider";
-import { archiveLibraryDrillForTeam, forkDrill, setTeamDrillArchived, unarchiveLibraryDrillForTeam, updateDrill } from "@/lib/offline/actions";
-import { isDrillArchived, minutesLabel } from "@/lib/practice/drills";
+import { setTeamDrillArchived, updateDrill } from "@/lib/offline/actions";
+import { minutesLabel } from "@/lib/practice/drills";
 import { categoryLabel, focusAreaLabel } from "@/lib/practice/constants";
 import { DrillForm, drillFormToInput, DrillFormValue } from "@/components/DrillForm";
 
 export default function DrillDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { team, drills, drillArchives, practiceBlocks, coaches, coachId, mutate, deleteDrillPermanently, ready } = useData();
+  const { drills, practiceBlocks, coaches, coachId, mutate, deleteDrillPermanently, ready } = useData();
   const drill = drills.find((d) => d.id === params.id);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [formValue, setFormValue] = useState<DrillFormValue | null>(null);
 
-  const teamId = team?.id ?? "";
   const myRole = coaches.find((c) => c.id === coachId)?.role;
   const referencedCount = useMemo(() => practiceBlocks.filter((b) => b.drillId === params.id).length, [practiceBlocks, params.id]);
 
@@ -31,10 +30,6 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
       </div>
     );
   }
-
-  const isOwnTeamDrill = drill.scope === "team" && drill.teamId === teamId;
-  const isLibrary = drill.scope === "library";
-  const archived = isDrillArchived(drill, drillArchives);
 
   function startEdit() {
     if (!drill) return;
@@ -65,18 +60,7 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
 
   async function toggleArchive() {
     if (!drill) return;
-    if (isLibrary) {
-      if (archived) await unarchiveLibraryDrillForTeam(mutate, teamId, drill.id);
-      else await archiveLibraryDrillForTeam(mutate, teamId, drill.id);
-    } else {
-      await setTeamDrillArchived(mutate, drill.id, !archived);
-    }
-  }
-
-  async function doFork() {
-    if (!drill) return;
-    const id = await forkDrill(mutate, drill);
-    router.push(`/practice/drills/${id}`);
+    await setTeamDrillArchived(mutate, drill.id, !drill.archived);
   }
 
   async function doDelete() {
@@ -107,13 +91,8 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">{drill.name}</h1>
-        <span className="text-xs font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">
-          {isLibrary ? "Library" : "My Team"}
-        </span>
-      </div>
-      {archived && <p className="text-sm font-semibold text-amber-700 bg-amber-50 rounded-lg px-3 py-2">This drill is archived.</p>}
+      <h1 className="text-xl font-bold">{drill.name}</h1>
+      {drill.archived && <p className="text-sm font-semibold text-amber-700 bg-amber-50 rounded-lg px-3 py-2">This drill is archived.</p>}
 
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap gap-2">
@@ -183,14 +162,13 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {isOwnTeamDrill && <button className="btn-secondary flex-1" onClick={startEdit}>Edit</button>}
-        {isLibrary && <button className="btn-secondary flex-1" onClick={doFork}>Copy &amp; customize</button>}
+        <button className="btn-secondary flex-1" onClick={startEdit}>Edit</button>
         <button className="btn-secondary flex-1" onClick={toggleArchive}>
-          {archived ? "Unarchive" : "Archive"}
+          {drill.archived ? "Unarchive" : "Archive"}
         </button>
       </div>
 
-      {isOwnTeamDrill && myRole === "owner" && (
+      {myRole === "owner" && (
         <div className="card p-4 space-y-2 border-red-200">
           <p className="label m-0">Danger zone</p>
           {referencedCount > 0 ? (

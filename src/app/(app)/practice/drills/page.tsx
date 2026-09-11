@@ -3,12 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/lib/offline/DataProvider";
-import { isDrillArchived, minutesLabel, visibleDrills } from "@/lib/practice/drills";
+import { minutesLabel, visibleDrills } from "@/lib/practice/drills";
 import { categoryLabel, DRILL_CATEGORIES, focusAreaLabel, FOCUS_AREAS } from "@/lib/practice/constants";
 import { DrillRecord } from "@/lib/offline/DataProvider";
 
 export default function DrillLibraryPage() {
-  const { team, drills, drillArchives, ready } = useData();
+  const { team, drills, ready } = useData();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [focusArea, setFocusArea] = useState<string | null>(null);
@@ -17,17 +17,14 @@ export default function DrillLibraryPage() {
   const teamId = team?.id ?? "";
 
   const filtered = useMemo(() => {
-    const base = showArchived ? drills.filter((d) => d.scope === "library" || d.teamId === teamId) : visibleDrills(drills, drillArchives, teamId);
+    const base = showArchived ? drills.filter((d) => d.teamId === teamId) : visibleDrills(drills, teamId);
     const q = search.trim().toLowerCase();
     return base
       .filter((d) => (category ? d.category === category : true))
       .filter((d) => (focusArea ? d.focusAreas.includes(focusArea) : true))
       .filter((d) => (q ? d.name.toLowerCase().includes(q) || d.instructions.toLowerCase().includes(q) : true))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [drills, drillArchives, teamId, search, category, focusArea, showArchived]);
-
-  const myDrills = filtered.filter((d) => d.scope === "team");
-  const libraryDrills = filtered.filter((d) => d.scope === "library");
+  }, [drills, teamId, search, category, focusArea, showArchived]);
 
   if (!ready) {
     return <p className="p-6 text-slate-500">Loading drill library...</p>;
@@ -68,17 +65,10 @@ export default function DrillLibraryPage() {
       </div>
 
       <div className="space-y-2">
-        <p className="label">My Team's Drills ({myDrills.length})</p>
-        {myDrills.length === 0 && <p className="text-slate-500 text-sm px-1">None yet - create one, or open a library drill below and copy it to customize.</p>}
-        {myDrills.map((d) => (
-          <DrillRow key={d.id} drill={d} archived={isDrillArchived(d, drillArchives)} />
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <p className="label">Library Drills ({libraryDrills.length})</p>
-        {libraryDrills.map((d) => (
-          <DrillRow key={d.id} drill={d} archived={isDrillArchived(d, drillArchives)} />
+        <p className="label">Drills ({filtered.length})</p>
+        {filtered.length === 0 && <p className="text-slate-500 text-sm px-1">No drills match.</p>}
+        {filtered.map((d) => (
+          <DrillRow key={d.id} drill={d} />
         ))}
       </div>
     </div>
@@ -98,16 +88,16 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
   );
 }
 
-function DrillRow({ drill, archived }: { drill: DrillRecord; archived: boolean }) {
+function DrillRow({ drill }: { drill: DrillRecord }) {
   return (
     <Link
       href={`/practice/drills/${drill.id}`}
-      className={`card p-3 flex items-center justify-between gap-2 ${archived ? "opacity-50" : ""}`}
+      className={`card p-3 flex items-center justify-between gap-2 ${drill.archived ? "opacity-50" : ""}`}
     >
       <div className="min-w-0">
         <p className="font-semibold truncate">
           {drill.name}
-          {archived && <span className="ml-2 text-xs font-normal text-slate-500">(archived)</span>}
+          {drill.archived && <span className="ml-2 text-xs font-normal text-slate-500">(archived)</span>}
         </p>
         <div className="flex flex-wrap gap-1 mt-1">
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{categoryLabel(drill.category)}</span>

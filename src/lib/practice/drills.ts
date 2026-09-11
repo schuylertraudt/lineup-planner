@@ -1,17 +1,8 @@
-import { DrillArchiveRecord, DrillRecord } from "@/lib/offline/DataProvider";
+import { DrillRecord } from "@/lib/offline/DataProvider";
 
-/** A team's usable drill catalog: its own drills plus every library drill it hasn't archived. */
-export function visibleDrills(drills: DrillRecord[], drillArchives: DrillArchiveRecord[], teamId: string): DrillRecord[] {
-  const archivedLibraryIds = new Set(drillArchives.map((a) => a.drillId));
-  return drills.filter((d) => {
-    if (d.scope === "library") return !archivedLibraryIds.has(d.id);
-    return d.teamId === teamId;
-  });
-}
-
-export function isDrillArchived(drill: DrillRecord, drillArchives: DrillArchiveRecord[]): boolean {
-  if (drill.scope === "library") return drillArchives.some((a) => a.drillId === drill.id);
-  return drill.archived;
+/** A team's active drill catalog: its own drills, excluding archived ones. */
+export function visibleDrills(drills: DrillRecord[], teamId: string): DrillRecord[] {
+  return drills.filter((d) => d.teamId === teamId && !d.archived);
 }
 
 export function slugify(name: string): string {

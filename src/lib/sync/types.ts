@@ -6,7 +6,6 @@ export type SyncEntity =
   | "gamePeriod"
   | "team"
   | "drill"
-  | "drillArchive"
   | "practicePlan"
   | "practiceBlock"
   | "practiceAttendance";
@@ -36,10 +35,6 @@ export function deterministicAssignmentId(
 
 export function deterministicGamePeriodId(gameId: string, periodNumber: number): string {
   return `${gameId}:${periodNumber}`;
-}
-
-export function deterministicDrillArchiveId(teamId: string, drillId: string): string {
-  return `${teamId}:${drillId}`;
 }
 
 export function deterministicPracticeAttendanceId(planId: string, playerId: string): string {

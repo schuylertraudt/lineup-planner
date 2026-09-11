@@ -160,15 +160,14 @@ mixes minutes into game planning or periods into practice planning. There's
 no live/timer mode; a plan is something you build ahead of time and read off
 your phone at the field.
 
-- **Drill** rows are either `scope: "library"` (`teamId` is `null`, shared
-  read-only across every team, seeded automatically by the practice-module
-  migration) or `scope: "team"` (created by a coach, editable and
-  permanently deletable by that team only). Forking a library drill creates
-  a full `scope: "team"` copy with `sourceDrillId` pointing at the original,
-  so it can be freely customized without touching the shared row.
-- **DrillArchive** is a per-team hide marker for library drills (`archived`
-  on `Drill` itself is used instead for a team's own drills), so archiving a
-  shared drill on one team never affects any other team.
+- **Drill** rows with `scope: "library"` (`teamId` is `null`) only ever exist
+  as the seed template the practice-module migration ships - they're never
+  queried or shown to a client. Every team gets its own independent
+  `scope: "team"` copy of all 20 starter drills the moment the team is
+  created (`seedTeamDrillsFromLibrary()`, called from signup), so a coach
+  can edit or permanently delete a starter drill exactly like one they added
+  themselves, with zero effect on any other team. A drill's `archived` flag
+  is the only "hide without deleting" mechanism there is.
 - **PracticePlan** holds a `targetMinutes` (defaulting from `Team.
   targetMinutes`, itself defaulting to 30) and an ordered list of
   **PracticeBlock** rows (`drill` / `break` / `talk` / `free_play`), each

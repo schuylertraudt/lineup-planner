@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from "idb";
 
 export const DB_NAME = "lineup-planner";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export interface OutboxItem {
   id: string;
@@ -32,13 +32,16 @@ export function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains("gamePeriods")) db.createObjectStore("gamePeriods", { keyPath: "id" });
         if (!db.objectStoreNames.contains("coaches")) db.createObjectStore("coaches", { keyPath: "id" });
         if (!db.objectStoreNames.contains("drills")) db.createObjectStore("drills", { keyPath: "id" });
-        if (!db.objectStoreNames.contains("drillArchives")) db.createObjectStore("drillArchives", { keyPath: "id" });
         if (!db.objectStoreNames.contains("practicePlans")) db.createObjectStore("practicePlans", { keyPath: "id" });
         if (!db.objectStoreNames.contains("practiceBlocks")) db.createObjectStore("practiceBlocks", { keyPath: "id" });
         if (!db.objectStoreNames.contains("practiceAttendances"))
           db.createObjectStore("practiceAttendances", { keyPath: "id" });
         if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "id" });
         if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
+        // DrillArchive is gone - every team now gets its own editable/deletable
+        // drill copies at creation instead of a shared library with a per-team
+        // hide marker, so the old local store is stale and safe to drop.
+        if (db.objectStoreNames.contains("drillArchives")) db.deleteObjectStore("drillArchives");
       },
     });
   }

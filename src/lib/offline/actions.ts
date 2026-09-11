@@ -2,13 +2,10 @@ import { v4 as uuid } from "uuid";
 import {
   deterministicAssignmentId,
   deterministicAvailabilityId,
-  deterministicDrillArchiveId,
   deterministicGamePeriodId,
   deterministicPracticeAttendanceId,
   SyncEntity,
 } from "@/lib/sync/types";
-import { DrillRecord } from "@/lib/offline/DataProvider";
-
 type Mutate = (entity: SyncEntity, entityId: string, fields: Record<string, unknown>, op?: "upsert" | "delete") => Promise<void>;
 
 export function newId(): string {
@@ -138,43 +135,12 @@ export async function createDrill(mutate: Mutate, data: DrillInput): Promise<str
   return id;
 }
 
-export async function forkDrill(mutate: Mutate, source: DrillRecord): Promise<string> {
-  return createDrill(mutate, {
-    name: source.name,
-    slug: source.slug,
-    category: source.category,
-    focusAreas: source.focusAreas,
-    defaultMinutes: source.defaultMinutes,
-    minMinutes: source.minMinutes,
-    maxMinutes: source.maxMinutes,
-    minPlayers: source.minPlayers,
-    maxPlayers: source.maxPlayers,
-    equipment: source.equipment,
-    setup: source.setup,
-    instructions: source.instructions,
-    coachingPoints: source.coachingPoints,
-    progressions: source.progressions,
-    ageNotes: source.ageNotes,
-    sourceDrillId: source.id,
-  });
-}
-
 export async function updateDrill(mutate: Mutate, id: string, fields: Record<string, unknown>) {
   await mutate("drill", id, fields);
 }
 
 export async function setTeamDrillArchived(mutate: Mutate, id: string, archived: boolean) {
   await mutate("drill", id, { archived });
-}
-
-export async function archiveLibraryDrillForTeam(mutate: Mutate, teamId: string, drillId: string) {
-  const id = deterministicDrillArchiveId(teamId, drillId);
-  await mutate("drillArchive", id, { teamId, drillId });
-}
-
-export async function unarchiveLibraryDrillForTeam(mutate: Mutate, teamId: string, drillId: string) {
-  const id = deterministicDrillArchiveId(teamId, drillId);
-  await mutate("drillArchive", id, { teamId, drillId }, "delete");
 }
 
 export async function setPracticeAttendance(

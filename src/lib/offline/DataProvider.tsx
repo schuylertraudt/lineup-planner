@@ -100,12 +100,6 @@ export interface DrillRecord {
   createdAt: string;
   updatedAt: string;
 }
-export interface DrillArchiveRecord {
-  id: string;
-  teamId: string;
-  drillId: string;
-  updatedAt: string;
-}
 export interface PracticePlanRecord {
   id: string;
   teamId: string;
@@ -147,7 +141,6 @@ interface DataState {
   gamePeriods: GamePeriodRecord[];
   coaches: CoachRecord[];
   drills: DrillRecord[];
-  drillArchives: DrillArchiveRecord[];
   practicePlans: PracticePlanRecord[];
   practiceBlocks: PracticeBlockRecord[];
   practiceAttendances: PracticeAttendanceRecord[];
@@ -163,7 +156,6 @@ const EMPTY_STATE: DataState = {
   gamePeriods: [],
   coaches: [],
   drills: [],
-  drillArchives: [],
   practicePlans: [],
   practiceBlocks: [],
   practiceAttendances: [],
@@ -207,7 +199,6 @@ const STORE_BY_ENTITY: Record<SyncEntity, string> = {
   gamePeriod: "gamePeriods",
   team: "team",
   drill: "drills",
-  drillArchive: "drillArchives",
   practicePlan: "practicePlans",
   practiceBlock: "practiceBlocks",
   practiceAttendance: "practiceAttendances",
@@ -235,7 +226,6 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       gamePeriods,
       coaches,
       drills,
-      drillArchives,
       practicePlans,
       practiceBlocks,
       practiceAttendances,
@@ -249,7 +239,6 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       getAll<GamePeriodRecord>("gamePeriods"),
       getAll<CoachRecord>("coaches"),
       getAll<DrillRecord>("drills"),
-      getAll<DrillArchiveRecord>("drillArchives"),
       getAll<PracticePlanRecord>("practicePlans"),
       getAll<PracticeBlockRecord>("practiceBlocks"),
       getAll<PracticeAttendanceRecord>("practiceAttendances"),
@@ -264,7 +253,6 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       gamePeriods,
       coaches,
       drills,
-      drillArchives,
       practicePlans,
       practiceBlocks,
       practiceAttendances,
@@ -344,7 +332,6 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     const practiceAttendances = (result.practiceAttendances as PracticeAttendanceRecord[]).filter(
       (a) => !pendingIds.has(a.id)
     );
-    const drillArchives = (result.drillArchives as DrillArchiveRecord[]).filter((a) => !pendingIds.has(a.id));
 
     await Promise.all([
       putAll("players", players),
@@ -356,14 +343,12 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       putAll("practicePlans", practicePlans),
       putAll("practiceBlocks", practiceBlocks),
       putAll("practiceAttendances", practiceAttendances),
-      // The server always returns its complete, current position-slot,
-      // coach, and drill-archive lists (never a delta), so a full replace
-      // here is what keeps a slot template edit (which deletes and
-      // recreates every slot under new ids) or an un-archived library
-      // drill from leaving orphaned rows sitting in IndexedDB forever.
+      // The server always returns its complete, current position-slot and
+      // coach lists (never a delta), so a full replace here is what keeps a
+      // slot template edit (which deletes and recreates every slot under
+      // new ids) from leaving orphaned old rows sitting in IndexedDB forever.
       replaceAll("slots", result.slots as SlotRecord[]),
       replaceAll("coaches", result.coaches as CoachRecord[]),
-      replaceAll("drillArchives", drillArchives),
     ]);
     if (result.team) await putAll("team", [result.team]);
 
@@ -381,7 +366,6 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       for (const b of practiceBlocks) next.practiceBlocks = upsertList(next.practiceBlocks, b);
       for (const a of practiceAttendances) next.practiceAttendances = upsertList(next.practiceAttendances, a);
       next.coaches = result.coaches as CoachRecord[];
-      next.drillArchives = drillArchives;
       return next;
     });
 

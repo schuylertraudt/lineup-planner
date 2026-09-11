@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createSession, generateJoinCode, hashPassword } from "@/lib/auth";
+import { seedTeamDrillsFromLibrary } from "@/lib/practice/seedTeamDrills";
 
 const DEFAULT_SLOTS = [
   { name: "GK", group: "GK" },
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
   });
 
   const coach = team.coaches[0];
+  await seedTeamDrillsFromLibrary(team.id);
   await createSession(coach.id);
 
   return NextResponse.json({ team: { id: team.id, name: team.name, joinCode: team.joinCode }, coach: { id: coach.id, email: coach.email, name: coach.name, role: coach.role } });

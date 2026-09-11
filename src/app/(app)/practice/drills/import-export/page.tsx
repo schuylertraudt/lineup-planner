@@ -62,8 +62,7 @@ export default function DrillImportExportPage() {
       <div className="card p-4 space-y-3">
         <p className="font-semibold">Export</p>
         <p className="text-sm text-slate-500">
-          Downloads your team&apos;s {teamDrillCount} custom drill{teamDrillCount === 1 ? "" : "s"} as a JSON file. Library
-          drills aren&apos;t included - they&apos;re shared and already available to every team.
+          Downloads all {teamDrillCount} of your team&apos;s drill{teamDrillCount === 1 ? "" : "s"} as a JSON file.
         </p>
         <button className="btn-secondary w-full" onClick={downloadExport} disabled={teamDrillCount === 0}>
           Download JSON

@@ -14,7 +14,6 @@ export interface PullResult {
   gamePeriods: unknown[];
   coaches: unknown[];
   drills: unknown[];
-  drillArchives: unknown[];
   practicePlans: unknown[];
   practiceBlocks: unknown[];
   practiceAttendances: unknown[];

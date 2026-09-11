@@ -23,7 +23,6 @@ model Team {
   games         Game[]
   slots         PositionSlot[]
   drills        Drill[]
-  drillArchives DrillArchive[]
   practicePlans PracticePlan[]
 }
 
@@ -156,7 +155,7 @@ model Assignment {
 
 model Drill {
   id              String   @id
-  teamId          String? // null = shared library drill, visible to every team
+  teamId          String? // null only for the seed template rows (scope: "library"), never shown to users - every team gets its own copy at creation
   team            Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   name            String
   slug            String   @default("")
@@ -173,29 +172,16 @@ model Drill {
   coachingPoints  String[] @default([])
   progressions    String[] @default([])
   ageNotes        String   @default("")
-  scope           String   @default("team") // library | team
+  scope           String   @default("team") // library (seed template only) | team
   sourceDrillId   String?
-  archived        Boolean  @default(false) // team-scoped drills only; library drills use DrillArchive
+  archived        Boolean  @default(false)
   createdBy       String?
   updatedBy       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   fieldTimestamps Json     @default("{}")
 
-  blocks      PracticeBlock[]
-  archivedFor DrillArchive[]
-}
-
-/// Per-team hide of a shared library drill - archiving a library drill must never affect other teams.
-model DrillArchive {
-  id        String   @id // `${teamId}:${drillId}`
-  teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  drillId   String
-  drill     Drill    @relation(fields: [drillId], references: [id], onDelete: Cascade)
-  updatedAt DateTime @updatedAt
-
-  @@unique([teamId, drillId])
+  blocks PracticeBlock[]
 }
 
 model PracticePlan {

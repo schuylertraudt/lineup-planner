@@ -28,7 +28,6 @@ const ALLOWED_FIELDS: Record<Mutation["entity"], string[]> = {
     "sourceDrillId",
     "archived",
   ],
-  drillArchive: ["teamId", "drillId"],
   practicePlan: ["date", "location", "targetMinutes", "status", "notes", "isTemplate", "templateName"],
   practiceBlock: ["planId", "order", "type", "drillId", "plannedMinutes", "blockNotes"],
   practiceAttendance: ["planId", "playerId", "status"],
@@ -47,10 +46,6 @@ export class SyncAuthError extends Error {}
 
 export async function applyMutation(mutation: Mutation, teamId: string, coachId: string) {
   if (mutation.op === "delete") {
-    if (mutation.entity === "drillArchive") {
-      await prisma.drillArchive.deleteMany({ where: { id: mutation.entityId, teamId } });
-      return null;
-    }
     if (mutation.entity === "practiceBlock") {
       const block = await prisma.practiceBlock.findUnique({ where: { id: mutation.entityId }, include: { plan: true } });
       if (block && block.plan.teamId !== teamId) throw new SyncAuthError("block not in team");
@@ -77,8 +72,6 @@ export async function applyMutation(mutation: Mutation, teamId: string, coachId:
       return applyTeam(mutation, fields, teamId);
     case "drill":
       return applyDrill(mutation, fields, teamId, coachId);
-    case "drillArchive":
-      return applyDrillArchive(mutation, fields, teamId);
     case "practicePlan":
       return applyPracticePlan(mutation, fields, teamId);
     case "practiceBlock":
@@ -274,8 +267,6 @@ async function applyTeam(m: Mutation, fields: Record<string, unknown>, teamId: s
 
 async function applyDrill(m: Mutation, fields: Record<string, unknown>, teamId: string, coachId: string) {
   const existing = await prisma.drill.findUnique({ where: { id: m.entityId } });
-  // A drill can only be created or edited in team scope here - forking a library
-  // drill means the client creates a brand-new team-scoped row client-side first.
   if (existing && existing.teamId !== teamId) throw new SyncAuthError("drill not in team");
 
   if (!existing) {
@@ -339,21 +330,6 @@ async function applyDrill(m: Mutation, fields: Record<string, unknown>, teamId: 
       updatedBy: coachId,
       fieldTimestamps: timestamps,
     },
-  });
-}
-
-async function applyDrillArchive(m: Mutation, fields: Record<string, unknown>, teamId: string) {
-  const drillId = fields.drillId as string;
-  const drill = await prisma.drill.findUnique({ where: { id: drillId } });
-  if (!drill) throw new SyncAuthError("drill not found");
-  // Only library drills (or this team's own drills) can be archived this way; a
-  // team's own drills use the plain `archived` field on Drill instead.
-  if (drill.scope !== "library" && drill.teamId !== teamId) throw new SyncAuthError("drill not in team");
-
-  return prisma.drillArchive.upsert({
-    where: { id: m.entityId },
-    create: { id: m.entityId, teamId, drillId, updatedAt: new Date(m.updatedAt) },
-    update: { updatedAt: new Date(m.updatedAt) },
   });
 }
 

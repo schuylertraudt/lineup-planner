@@ -53,6 +53,39 @@ async function main() {
     include: { slots: { orderBy: { order: "asc" } } },
   });
 
+  // Give the demo team its own editable/deletable copy of every starter
+  // drill, the same way every real team is seeded at signup - keyed by the
+  // library template's id so the example practice plan below can look them up.
+  const libraryDrills = await prisma.drill.findMany({ where: { scope: "library" } });
+  const teamDrillIdByTemplateId = new Map<string, string>();
+  for (const t of libraryDrills) {
+    const newId = randomUUID();
+    teamDrillIdByTemplateId.set(t.id, newId);
+    await prisma.drill.create({
+      data: {
+        id: newId,
+        teamId: team.id,
+        name: t.name,
+        slug: t.slug,
+        category: t.category,
+        focusAreas: t.focusAreas,
+        defaultMinutes: t.defaultMinutes,
+        minMinutes: t.minMinutes,
+        maxMinutes: t.maxMinutes,
+        minPlayers: t.minPlayers,
+        maxPlayers: t.maxPlayers,
+        equipment: t.equipment,
+        setup: t.setup,
+        instructions: t.instructions,
+        coachingPoints: t.coachingPoints,
+        progressions: t.progressions,
+        ageNotes: t.ageNotes,
+        scope: "team",
+        archived: false,
+      },
+    });
+  }
+
   const players = [];
   for (let i = 0; i < PLAYER_NAMES.length; i++) {
     const [firstName, lastNameInitial, jerseyNumber] = PLAYER_NAMES[i];
@@ -167,11 +200,11 @@ async function main() {
     },
   });
   const planBlocks: { type: string; drillId: string | null; minutes: number }[] = [
-    { type: "drill", drillId: "lib-dribble-tag", minutes: 6 },
+    { type: "drill", drillId: teamDrillIdByTemplateId.get("lib-dribble-tag") ?? null, minutes: 6 },
     { type: "break", drillId: null, minutes: 2 },
-    { type: "drill", drillId: "lib-cone-gates", minutes: 8 },
-    { type: "drill", drillId: "lib-3v3-no-keepers", minutes: 10 },
-    { type: "drill", drillId: "lib-crossbar-challenge", minutes: 4 },
+    { type: "drill", drillId: teamDrillIdByTemplateId.get("lib-cone-gates") ?? null, minutes: 8 },
+    { type: "drill", drillId: teamDrillIdByTemplateId.get("lib-3v3-no-keepers") ?? null, minutes: 10 },
+    { type: "drill", drillId: teamDrillIdByTemplateId.get("lib-crossbar-challenge") ?? null, minutes: 4 },
   ];
   for (let i = 0; i < planBlocks.length; i++) {
     const b = planBlocks[i];
