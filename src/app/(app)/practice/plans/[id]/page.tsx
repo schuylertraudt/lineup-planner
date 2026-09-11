@@ -258,10 +258,10 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-400 font-semibold">at {startOffset} min</p>
                 <div className="flex items-start gap-1.5">
-                  <p className="font-semibold">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
+                  <p className="text-sm font-semibold leading-snug">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
                   {drill && (
                     <button
-                      className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-slate-300 text-slate-500 text-xs font-bold leading-none flex items-center justify-center"
+                      className="shrink-0 mt-0.5 w-4 h-4 rounded-full border border-slate-300 text-slate-500 text-[10px] font-bold leading-none flex items-center justify-center"
                       onClick={() => setInfoDrill(drill)}
                       aria-label={`About ${drill.name}`}
                     >
@@ -406,11 +406,11 @@ function DrillPicker({
         {filtered.map((d) => (
           <div key={d.id} className="flex items-center gap-1 rounded-lg hover:bg-slate-100">
             <button className="flex-1 min-w-0 text-left px-3 py-2 flex items-center justify-between gap-2" onClick={() => onPick(d)}>
-              <span className="font-medium">{d.name}</span>
+              <span className="text-sm font-medium">{d.name}</span>
               <span className="text-xs text-slate-500 shrink-0">{d.defaultMinutes} min</span>
             </button>
             <button
-              className="shrink-0 mr-2 w-5 h-5 rounded-full border border-slate-300 text-slate-500 text-xs font-bold leading-none flex items-center justify-center"
+              className="shrink-0 mr-2 w-4 h-4 rounded-full border border-slate-300 text-slate-500 text-[10px] font-bold leading-none flex items-center justify-center"
               onClick={() => onInfo(d)}
               aria-label={`About ${d.name}`}
             >
