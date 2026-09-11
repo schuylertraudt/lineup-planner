@@ -151,3 +151,79 @@ a strictly-decreasing weighted penalty score. Unit tests live in
 `src/lib/__tests__/autofill.test.ts`, covering equal-period distribution, GK
 rotation rules, no-back-to-back-bench, manual-override preservation, and
 awkward roster sizes (9, 10, 13 available players against 8 field slots).
+
+## Practice Planner
+
+The Practice tab is a separate, **minute-based** planning tool - it shares
+only the Team and Player tables with the period-based game side and never
+mixes minutes into game planning or periods into practice planning. There's
+no live/timer mode; a plan is something you build ahead of time and read off
+your phone at the field.
+
+- **Drill** rows are either `scope: "library"` (`teamId` is `null`, shared
+  read-only across every team, seeded automatically by the practice-module
+  migration) or `scope: "team"` (created by a coach, editable and
+  permanently deletable by that team only). Forking a library drill creates
+  a full `scope: "team"` copy with `sourceDrillId` pointing at the original,
+  so it can be freely customized without touching the shared row.
+- **DrillArchive** is a per-team hide marker for library drills (`archived`
+  on `Drill` itself is used instead for a team's own drills), so archiving a
+  shared drill on one team never affects any other team.
+- **PracticePlan** holds a `targetMinutes` (defaulting from `Team.
+  targetMinutes`, itself defaulting to 30) and an ordered list of
+  **PracticeBlock** rows (`drill` / `break` / `talk` / `free_play`), each
+  with its own `plannedMinutes`. A block's start offset is just the running
+  sum of every earlier block's minutes - nothing about wall-clock time is
+  stored.
+- Permanently deleting a drill is owner-only and blocked server-side
+  (`DELETE /api/drills/:id`) if any `PracticeBlock` still references it;
+  archiving is the reversible default everyone else gets.
+
+### Drill JSON import/export schema
+
+The drill library's Import/Export screen (`/practice/drills/import-export`)
+is the supported way to bulk-manage a team's own drills - there's no
+supported path that edits seed files, scripts, or the database directly.
+Export downloads the team's own (`scope: "team"`) drills as a JSON array;
+import accepts a JSON array of the same shape and creates one new
+team-scoped drill per entry (imported drills are always created fresh, even
+if re-importing a previously-exported file - ids are never reused).
+
+Each array entry:
+
+```json
+{
+  "name": "Cone Gates",
+  "category": "technical",
+  "focusAreas": ["dribbling", "spatial_awareness"],
+  "defaultMinutes": 8,
+  "minMinutes": 5,
+  "maxMinutes": 12,
+  "minPlayers": 5,
+  "maxPlayers": null,
+  "equipment": ["Balls (one per player)", "10+ pairs of cones"],
+  "setup": "Scatter ten two-cone gates around the space.",
+  "instructions": "Each player dribbles through as many gates as possible in 60 seconds...",
+  "coachingPoints": ["Head up between gates", "Push the ball with the inside of your foot..."],
+  "progressions": ["Must use a different gate each time", "Weak foot only"],
+  "ageNotes": ""
+}
+```
+
+Field rules:
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | yes | Non-empty string. |
+| `category` | yes | One of `warmup`, `technical`, `small_sided_game`, `fun_finisher`. |
+| `defaultMinutes` | yes | Positive integer. |
+| `focusAreas` | no | Array of `dribbling`, `passing`, `shooting`, `defending`, `first_touch`, `spatial_awareness`, `fitness_disguised`. Defaults to `[]`. |
+| `minMinutes` / `maxMinutes` | no | Integer or `null`. Soft floor/ceiling used by validation warnings and auto-balance, not enforced on the stepper. |
+| `minPlayers` / `maxPlayers` | no | Integer or `null`. |
+| `equipment` / `coachingPoints` / `progressions` | no | Arrays of strings, shown in that order (coaching points and progressions are ordered lists, not sets). Default to `[]`. |
+| `setup` / `instructions` / `ageNotes` | no | Free text. Default to `""`. |
+
+An entry missing `name`, `category`, or `defaultMinutes`, or with a
+`category` outside the four listed above, is rejected - the import screen
+lists which entries failed and why without importing any of them, so you
+can fix the file and retry.

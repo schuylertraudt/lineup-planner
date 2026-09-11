@@ -35,9 +35,12 @@ export default function DrillLibraryPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Drill Library</h1>
-        <Link href="/practice/drills/new" className="btn-primary text-sm">+ New Drill</Link>
+        <div className="flex gap-2 shrink-0">
+          <Link href="/practice/drills/import-export" className="btn-secondary text-sm">Import/Export</Link>
+          <Link href="/practice/drills/new" className="btn-primary text-sm">+ New Drill</Link>
+        </div>
       </div>
 
       <div className="card p-4 space-y-3">
