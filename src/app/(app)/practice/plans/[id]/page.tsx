@@ -8,11 +8,14 @@ import {
   createPracticeBlock,
   deletePracticeBlock,
   duplicatePracticePlan,
+  setPracticeAttendance,
   updatePracticeBlock,
   updatePracticePlan,
 } from "@/lib/offline/actions";
 import { visibleDrills } from "@/lib/practice/drills";
 import { categoryLabel } from "@/lib/practice/constants";
+import { computePracticeWarnings } from "@/lib/practice/validation";
+import { computeAutoBalance } from "@/lib/practice/autobalance";
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
   drill: "Drill",
@@ -25,7 +28,8 @@ const BREAK_PRESETS = [1, 2, 3];
 
 export default function PracticePlanBuilderPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { team, drills, drillArchives, practicePlans, practiceBlocks, mutate, deletePracticePlan, ready } = useData();
+  const { team, players, drills, drillArchives, practicePlans, practiceBlocks, practiceAttendances, mutate, deletePracticePlan, ready } =
+    useData();
   const plan = practicePlans.find((p) => p.id === params.id);
   const [pickingDrill, setPickingDrill] = useState(false);
   const [pickingBreak, setPickingBreak] = useState(false);
@@ -33,13 +37,29 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
   const [templateNameDraft, setTemplateNameDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showWarnings, setShowWarnings] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
 
   const blocks = useMemo(
     () => practiceBlocks.filter((b) => b.planId === params.id).sort((a, b) => a.order - b.order),
     [practiceBlocks, params.id]
   );
 
+  const activePlayers = useMemo(() => players.filter((p) => p.active).sort((a, b) => a.order - b.order), [players]);
+  const attendanceByPlayer = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of practiceAttendances) {
+      if (a.planId === params.id) map.set(a.playerId, a.status);
+    }
+    return map;
+  }, [practiceAttendances, params.id]);
+  const presentPlayerCount = activePlayers.filter((p) => (attendanceByPlayer.get(p.id) ?? "present") !== "absent").length;
+
   const plannedMinutes = blocks.reduce((sum, b) => sum + b.plannedMinutes, 0);
+  const warnings = useMemo(
+    () => (plan ? computePracticeWarnings(plan, blocks, drills, presentPlayerCount) : []),
+    [plan, blocks, drills, presentPlayerCount]
+  );
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;
   if (!plan || !team) {
@@ -94,6 +114,19 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
 
   async function toggleStatus() {
     await updatePracticePlan(mutate, plan!.id, { status: plan!.status === "draft" ? "planned" : "draft" });
+  }
+
+  async function autoBalance() {
+    if (!plan) return;
+    const changes = computeAutoBalance(blocks, drills, plan.targetMinutes);
+    for (const change of changes) {
+      await updatePracticeBlock(mutate, change.blockId, { plannedMinutes: change.plannedMinutes });
+    }
+  }
+
+  async function toggleAttendance(playerId: string, currentlyAbsent: boolean) {
+    if (!plan) return;
+    await setPracticeAttendance(mutate, plan.id, playerId, currentlyAbsent ? "present" : "absent");
   }
 
   async function saveAsTemplate() {
@@ -181,7 +214,28 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
             </p>
           </div>
         </div>
+        {delta !== 0 && blocks.some((b) => b.type === "drill") && (
+          <button className="btn-secondary w-full text-sm" onClick={autoBalance}>Auto-balance to target</button>
+        )}
       </div>
+
+      {warnings.length > 0 && (
+        <div className="card">
+          <button className="w-full flex items-center justify-between p-3 min-h-touch" onClick={() => setShowWarnings((v) => !v)}>
+            <span className="font-semibold">Warnings ({warnings.length})</span>
+            <span className="text-slate-400 text-sm">{showWarnings ? "Hide" : "Show"}</span>
+          </button>
+          {showWarnings && (
+            <div className="border-t border-slate-200 p-3 space-y-2">
+              {warnings.map((w) => (
+                <div key={w.id} className="rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                  {w.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         {blocks.map((block, i) => {
@@ -233,6 +287,36 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
         {pickingDrill && (
           <div className="pt-2 border-t border-slate-200">
             <DrillPicker drills={visibleDrills(drills, drillArchives, team.id)} onPick={addDrill} />
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <button className="w-full flex items-center justify-between p-3 min-h-touch" onClick={() => setShowAttendance((v) => !v)}>
+          <span className="font-semibold">Attendance ({presentPlayerCount}/{activePlayers.length} present)</span>
+          <span className="text-slate-400 text-sm">{showAttendance ? "Hide" : "Show"}</span>
+        </button>
+        {showAttendance && (
+          <div className="border-t border-slate-200 p-3 space-y-2">
+            {activePlayers.map((p) => {
+              const absent = attendanceByPlayer.get(p.id) === "absent";
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-2">
+                  <span className={`text-sm font-medium ${absent ? "text-slate-400 line-through" : "text-slate-800"}`}>
+                    {p.firstName} {p.lastNameInitial}
+                  </span>
+                  <button
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border-2 min-h-touch ${
+                      absent ? "bg-white text-slate-500 border-slate-300" : "bg-field text-white border-field"
+                    }`}
+                    onClick={() => toggleAttendance(p.id, absent)}
+                  >
+                    {absent ? "Absent" : "Present"}
+                  </button>
+                </div>
+              );
+            })}
+            {activePlayers.length === 0 && <p className="text-sm text-slate-500">No active players on the roster.</p>}
           </div>
         )}
       </div>
