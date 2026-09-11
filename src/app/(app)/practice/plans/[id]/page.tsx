@@ -159,11 +159,16 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">{plan.isTemplate ? "Template" : "Practice Plan"}</h1>
-        {!plan.isTemplate && (
-          <button className="btn-secondary text-sm shrink-0" onClick={toggleStatus}>
-            {plan.status === "draft" ? "Mark as Planned" : "Revert to Draft"}
-          </button>
-        )}
+        <div className="flex gap-2 shrink-0">
+          {!plan.isTemplate && (
+            <Link href={`/practice/plans/${plan.id}/report`} className="btn-secondary text-sm">Report</Link>
+          )}
+          {!plan.isTemplate && (
+            <button className="btn-secondary text-sm" onClick={toggleStatus}>
+              {plan.status === "draft" ? "Mark as Planned" : "Revert to Draft"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card p-4 space-y-3">

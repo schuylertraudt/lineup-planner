@@ -28,6 +28,14 @@ export default function PracticeHubPage() {
         </div>
         <span className="text-slate-400">&rarr;</span>
       </Link>
+
+      <Link href="/practice/log" className="card p-4 flex items-center justify-between">
+        <div>
+          <p className="font-semibold">Practice Log</p>
+          <p className="text-sm text-slate-500">Season history &amp; focus-area coverage</p>
+        </div>
+        <span className="text-slate-400">&rarr;</span>
+      </Link>
     </div>
   );
 }
