@@ -190,6 +190,8 @@ interface DataContextValue extends DataState {
   refresh: () => Promise<void>;
   /** Deletes a game (and everything under it) on the server and purges it locally. Requires connectivity. */
   deleteGame: (gameId: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Permanently deletes a team-owned drill on the server (owner-only, blocked if plan-referenced) and purges it locally. Requires connectivity. */
+  deleteDrillPermanently: (drillId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -471,6 +473,22 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     return { ok: true };
   }, []);
 
+  const deleteDrillPermanently = useCallback(async (drillId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/drills/${drillId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error ?? "Delete failed." };
+      }
+    } catch {
+      return { ok: false, error: "Deleting a drill requires an internet connection. Try again once you're online." };
+    }
+
+    await deleteMany("drills", [drillId]);
+    setState((prev) => ({ ...prev, drills: prev.drills.filter((d) => d.id !== drillId) }));
+    return { ok: true };
+  }, []);
+
   useEffect(() => {
     (async () => {
       await loadFromIndexedDb();
@@ -505,7 +523,9 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
   }, [doFlush, doPull]);
 
   return (
-    <DataContext.Provider value={{ ...state, ready, syncStatus, pendingCount, coachId, mutate, refresh, deleteGame }}>
+    <DataContext.Provider
+      value={{ ...state, ready, syncStatus, pendingCount, coachId, mutate, refresh, deleteGame, deleteDrillPermanently }}
+    >
       {children}
     </DataContext.Provider>
   );

@@ -1,7 +1,15 @@
 import { v4 as uuid } from "uuid";
-import { deterministicAssignmentId, deterministicAvailabilityId, deterministicGamePeriodId } from "@/lib/sync/types";
+import {
+  deterministicAssignmentId,
+  deterministicAvailabilityId,
+  deterministicDrillArchiveId,
+  deterministicGamePeriodId,
+  deterministicPracticeAttendanceId,
+  SyncEntity,
+} from "@/lib/sync/types";
+import { DrillRecord } from "@/lib/offline/DataProvider";
 
-type Mutate = (entity: "player" | "game" | "availability" | "assignment" | "gamePeriod" | "team", entityId: string, fields: Record<string, unknown>) => Promise<void>;
+type Mutate = (entity: SyncEntity, entityId: string, fields: Record<string, unknown>, op?: "upsert" | "delete") => Promise<void>;
 
 export function newId(): string {
   return uuid();
@@ -85,4 +93,96 @@ export async function setGamePeriodStatus(
 
 export async function updateTeamSettings(mutate: Mutate, teamId: string, fields: Record<string, unknown>) {
   await mutate("team", teamId, fields);
+}
+
+export interface DrillInput {
+  name: string;
+  slug?: string;
+  category: string;
+  focusAreas?: string[];
+  defaultMinutes: number;
+  minMinutes?: number | null;
+  maxMinutes?: number | null;
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
+  equipment?: string[];
+  setup?: string;
+  instructions?: string;
+  coachingPoints?: string[];
+  progressions?: string[];
+  ageNotes?: string;
+  sourceDrillId?: string | null;
+}
+
+export async function createDrill(mutate: Mutate, data: DrillInput): Promise<string> {
+  const id = newId();
+  await mutate("drill", id, {
+    name: data.name,
+    slug: data.slug ?? "",
+    category: data.category,
+    focusAreas: data.focusAreas ?? [],
+    defaultMinutes: data.defaultMinutes,
+    minMinutes: data.minMinutes ?? null,
+    maxMinutes: data.maxMinutes ?? null,
+    minPlayers: data.minPlayers ?? null,
+    maxPlayers: data.maxPlayers ?? null,
+    equipment: data.equipment ?? [],
+    setup: data.setup ?? "",
+    instructions: data.instructions ?? "",
+    coachingPoints: data.coachingPoints ?? [],
+    progressions: data.progressions ?? [],
+    ageNotes: data.ageNotes ?? "",
+    sourceDrillId: data.sourceDrillId ?? null,
+    archived: false,
+  });
+  return id;
+}
+
+export async function forkDrill(mutate: Mutate, source: DrillRecord): Promise<string> {
+  return createDrill(mutate, {
+    name: source.name,
+    slug: source.slug,
+    category: source.category,
+    focusAreas: source.focusAreas,
+    defaultMinutes: source.defaultMinutes,
+    minMinutes: source.minMinutes,
+    maxMinutes: source.maxMinutes,
+    minPlayers: source.minPlayers,
+    maxPlayers: source.maxPlayers,
+    equipment: source.equipment,
+    setup: source.setup,
+    instructions: source.instructions,
+    coachingPoints: source.coachingPoints,
+    progressions: source.progressions,
+    ageNotes: source.ageNotes,
+    sourceDrillId: source.id,
+  });
+}
+
+export async function updateDrill(mutate: Mutate, id: string, fields: Record<string, unknown>) {
+  await mutate("drill", id, fields);
+}
+
+export async function setTeamDrillArchived(mutate: Mutate, id: string, archived: boolean) {
+  await mutate("drill", id, { archived });
+}
+
+export async function archiveLibraryDrillForTeam(mutate: Mutate, teamId: string, drillId: string) {
+  const id = deterministicDrillArchiveId(teamId, drillId);
+  await mutate("drillArchive", id, { teamId, drillId });
+}
+
+export async function unarchiveLibraryDrillForTeam(mutate: Mutate, teamId: string, drillId: string) {
+  const id = deterministicDrillArchiveId(teamId, drillId);
+  await mutate("drillArchive", id, { teamId, drillId }, "delete");
+}
+
+export async function setPracticeAttendance(
+  mutate: Mutate,
+  planId: string,
+  playerId: string,
+  status: "present" | "absent" | "late"
+) {
+  const id = deterministicPracticeAttendanceId(planId, playerId);
+  await mutate("practiceAttendance", id, { planId, playerId, status });
 }
