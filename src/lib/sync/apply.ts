@@ -47,11 +47,17 @@ export class SyncAuthError extends Error {}
 
 export async function applyMutation(mutation: Mutation, teamId: string, coachId: string) {
   if (mutation.op === "delete") {
-    if (mutation.entity !== "drillArchive") {
-      throw new SyncAuthError(`delete not supported for ${mutation.entity}`);
+    if (mutation.entity === "drillArchive") {
+      await prisma.drillArchive.deleteMany({ where: { id: mutation.entityId, teamId } });
+      return null;
     }
-    await prisma.drillArchive.deleteMany({ where: { id: mutation.entityId, teamId } });
-    return null;
+    if (mutation.entity === "practiceBlock") {
+      const block = await prisma.practiceBlock.findUnique({ where: { id: mutation.entityId }, include: { plan: true } });
+      if (block && block.plan.teamId !== teamId) throw new SyncAuthError("block not in team");
+      await prisma.practiceBlock.deleteMany({ where: { id: mutation.entityId } });
+      return null;
+    }
+    throw new SyncAuthError(`delete not supported for ${mutation.entity}`);
   }
 
   const fields = pickAllowed(mutation.entity, mutation.fields);

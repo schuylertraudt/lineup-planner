@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [seasonLabel, setSeasonLabel] = useState("");
   const [defaultPeriodCount, setDefaultPeriodCount] = useState(4);
+  const [targetMinutes, setTargetMinutes] = useState(30);
   const [slotDraft, setSlotDraft] = useState<{ name: string; group: PositionGroup }[]>([]);
   const [resetLink, setResetLink] = useState<string>("");
   const [joinCode, setJoinCode] = useState<string>("");
@@ -40,6 +41,7 @@ export default function SettingsPage() {
       setName(team.name);
       setSeasonLabel(team.seasonLabel);
       setDefaultPeriodCount(team.defaultPeriodCount);
+      setTargetMinutes(team.targetMinutes);
       setJoinCode(team.joinCode);
     }
   }, [team]);
@@ -52,7 +54,7 @@ export default function SettingsPage() {
 
   async function saveTeamInfo() {
     if (!team) return;
-    await updateTeamSettings(mutate, team.id, { name, seasonLabel, defaultPeriodCount });
+    await updateTeamSettings(mutate, team.id, { name, seasonLabel, defaultPeriodCount, targetMinutes });
     setMsg("Saved.");
     setTimeout(() => setMsg(""), 1500);
   }
@@ -147,6 +149,18 @@ export default function SettingsPage() {
             className="input"
             value={defaultPeriodCount}
             onChange={(e) => setDefaultPeriodCount(parseInt(e.target.value, 10) || 1)}
+            disabled={!isOwner}
+          />
+        </div>
+        <div>
+          <label className="label">Default practice length (minutes)</label>
+          <input
+            type="number"
+            min={10}
+            max={120}
+            className="input"
+            value={targetMinutes}
+            onChange={(e) => setTargetMinutes(parseInt(e.target.value, 10) || 30)}
             disabled={!isOwner}
           />
         </div>

@@ -186,3 +186,48 @@ export async function setPracticeAttendance(
   const id = deterministicPracticeAttendanceId(planId, playerId);
   await mutate("practiceAttendance", id, { planId, playerId, status });
 }
+
+export async function createPracticePlan(
+  mutate: Mutate,
+  data: { teamId: string; date?: string | null; location?: string; targetMinutes: number }
+): Promise<string> {
+  const id = newId();
+  await mutate("practicePlan", id, {
+    date: data.date ?? null,
+    location: data.location ?? "",
+    targetMinutes: data.targetMinutes,
+    status: "draft",
+    notes: "",
+    isTemplate: false,
+    templateName: "",
+  });
+  return id;
+}
+
+export async function updatePracticePlan(mutate: Mutate, id: string, fields: Record<string, unknown>) {
+  await mutate("practicePlan", id, fields);
+}
+
+export async function createPracticeBlock(
+  mutate: Mutate,
+  data: { planId: string; order: number; type: "drill" | "break" | "talk" | "free_play"; drillId?: string | null; plannedMinutes: number }
+): Promise<string> {
+  const id = newId();
+  await mutate("practiceBlock", id, {
+    planId: data.planId,
+    order: data.order,
+    type: data.type,
+    drillId: data.drillId ?? null,
+    plannedMinutes: data.plannedMinutes,
+    blockNotes: "",
+  });
+  return id;
+}
+
+export async function updatePracticeBlock(mutate: Mutate, id: string, fields: Record<string, unknown>) {
+  await mutate("practiceBlock", id, fields);
+}
+
+export async function deletePracticeBlock(mutate: Mutate, id: string, planId: string) {
+  await mutate("practiceBlock", id, { planId }, "delete");
+}

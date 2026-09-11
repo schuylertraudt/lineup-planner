@@ -13,6 +13,7 @@ export interface TeamRecord {
   seasonLabel: string;
   playersOnField: number;
   defaultPeriodCount: number;
+  targetMinutes: number;
 }
 export interface SlotRecord {
   id: string;
