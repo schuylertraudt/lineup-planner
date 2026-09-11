@@ -33,6 +33,11 @@ export default function GamePage({ params }: { params: { id: string } }) {
   const [mode, setMode] = useState<Mode>("plan");
   const [deleting, setDeleting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [editingGame, setEditingGame] = useState(false);
+  const [editOpponent, setEditOpponent] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editPeriodCount, setEditPeriodCount] = useState(4);
   const [selectedPeriod, setSelectedPeriod] = useState(1);
   const [viewAll, setViewAll] = useState(false);
   const [picker, setPicker] = useState<{ periodNumber: number; slotIndex: number } | null>(null);
@@ -220,6 +225,26 @@ export default function GamePage({ params }: { params: { id: string } }) {
     setMode("plan");
   }
 
+  function startEditGame() {
+    if (!game) return;
+    setEditOpponent(game.opponent);
+    setEditDate(game.date.slice(0, 10));
+    setEditLocation(game.location);
+    setEditPeriodCount(game.periodCount);
+    setEditingGame(true);
+  }
+
+  async function saveEditGame() {
+    if (!editOpponent.trim() || !editDate) return;
+    await updateGame(mutate, gameId, {
+      opponent: editOpponent.trim(),
+      date: new Date(editDate).toISOString(),
+      location: editLocation,
+      periodCount: editPeriodCount || 1,
+    });
+    setEditingGame(false);
+  }
+
   async function handleDeleteGame() {
     const ok = window.confirm(`Delete the game vs ${game!.opponent}? This permanently removes its plan, live record, and report. This cannot be undone.`);
     if (!ok) return;
@@ -237,21 +262,54 @@ export default function GamePage({ params }: { params: { id: string } }) {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-24">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold">vs {game.opponent}</h1>
-          <p className="text-sm text-slate-500">
-            {new Date(game.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-            {game.location ? ` · ${game.location}` : ""} · {periodCount} periods
-          </p>
+      {editingGame ? (
+        <div className="card p-4 space-y-3">
+          <div>
+            <p className="label">Opponent</p>
+            <input className="input" value={editOpponent} onChange={(e) => setEditOpponent(e.target.value)} />
+          </div>
+          <div>
+            <p className="label">Date</p>
+            <input type="date" className="input" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+          </div>
+          <div>
+            <p className="label">Location</p>
+            <input className="input" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} />
+          </div>
+          <div>
+            <p className="label">Periods</p>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              className="input"
+              value={editPeriodCount}
+              onChange={(e) => setEditPeriodCount(parseInt(e.target.value, 10) || 1)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary flex-1" disabled={!editOpponent.trim() || !editDate} onClick={saveEditGame}>Save</button>
+            <button className="btn-secondary" onClick={() => setEditingGame(false)}>Cancel</button>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <Link href={`/games/${gameId}/report`} className="btn-secondary text-sm">Report</Link>
-          <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleDeleteGame} disabled={deleting}>
-            {deleting ? "Deleting..." : "Delete game"}
-          </button>
+      ) : (
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-bold">vs {game.opponent}</h1>
+            <p className="text-sm text-slate-500">
+              {new Date(game.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              {game.location ? ` · ${game.location}` : ""} · {periodCount} periods
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Link href={`/games/${gameId}/report`} className="btn-secondary text-sm">Report</Link>
+            <button className="text-xs font-semibold text-field min-h-touch px-1" onClick={startEditGame}>Edit</button>
+            <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleDeleteGame} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete game"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex gap-2">
         <button className={`btn-secondary flex-1 ${mode === "plan" ? "!bg-field !text-white !border-field" : ""}`} onClick={() => setMode("plan")}>
