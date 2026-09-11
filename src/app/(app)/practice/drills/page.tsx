@@ -69,7 +69,7 @@ export default function DrillLibraryPage() {
 
       <div className="space-y-2">
         <p className="label">My Team's Drills ({myDrills.length})</p>
-        {myDrills.length === 0 && <p className="text-slate-500 text-sm px-1">None yet - create one or fork a library drill below.</p>}
+        {myDrills.length === 0 && <p className="text-slate-500 text-sm px-1">None yet - create one, or open a library drill below and copy it to customize.</p>}
         {myDrills.map((d) => (
           <DrillRow key={d.id} drill={d} archived={isDrillArchived(d, drillArchives)} />
         ))}

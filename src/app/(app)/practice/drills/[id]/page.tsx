@@ -184,7 +184,7 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
 
       <div className="flex flex-wrap gap-2">
         {isOwnTeamDrill && <button className="btn-secondary flex-1" onClick={startEdit}>Edit</button>}
-        {isLibrary && <button className="btn-secondary flex-1" onClick={doFork}>Fork to customize</button>}
+        {isLibrary && <button className="btn-secondary flex-1" onClick={doFork}>Copy &amp; customize</button>}
         <button className="btn-secondary flex-1" onClick={toggleArchive}>
           {archived ? "Unarchive" : "Archive"}
         </button>
