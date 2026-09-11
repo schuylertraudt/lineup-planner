@@ -32,6 +32,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
 
   const [mode, setMode] = useState<Mode>("plan");
   const [deleting, setDeleting] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState(1);
   const [viewAll, setViewAll] = useState(false);
   const [picker, setPicker] = useState<{ periodNumber: number; slotIndex: number } | null>(null);
@@ -202,6 +203,23 @@ export default function GamePage({ params }: { params: { id: string } }) {
     await updateGame(mutate, gameId, { status: "final" });
   }
 
+  async function handleResetToPlanned() {
+    const ok = window.confirm(
+      "Reset this game back to Planned? This clears every live assignment and period's start/complete progress. Your draft plan is untouched."
+    );
+    if (!ok) return;
+    setResetting(true);
+    for (let p = 1; p <= periodCount; p++) {
+      for (const slot of slotTemplate) {
+        await setAssignment(mutate, gameId, p, slot.index, null, true);
+      }
+      await setGamePeriodStatus(mutate, gameId, p, "planned");
+    }
+    await updateGame(mutate, gameId, { status: "planned" });
+    setResetting(false);
+    setMode("plan");
+  }
+
   async function handleDeleteGame() {
     const ok = window.confirm(`Delete the game vs ${game!.opponent}? This permanently removes its plan, live record, and report. This cannot be undone.`);
     if (!ok) return;
@@ -251,6 +269,14 @@ export default function GamePage({ params }: { params: { id: string } }) {
         <div className="card p-4 text-center space-y-3">
           <p className="text-slate-600">Start the game to begin tracking actual assignments period by period.</p>
           <button className="btn-primary w-full" onClick={startGame}>Start game</button>
+        </div>
+      )}
+
+      {mode === "live" && game.status !== "planned" && (
+        <div className="flex justify-end">
+          <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleResetToPlanned} disabled={resetting}>
+            {resetting ? "Resetting..." : "Reset to Planned"}
+          </button>
         </div>
       )}
 
