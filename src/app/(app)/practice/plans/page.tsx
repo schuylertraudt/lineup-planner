@@ -28,9 +28,12 @@ export default function PracticePlansPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Practice Plans</h1>
-        <button className="btn-primary" onClick={addPlan}>+ New Practice</button>
+        <div className="flex gap-2 shrink-0">
+          <Link href="/practice/templates" className="btn-secondary text-sm">Templates</Link>
+          <button className="btn-primary text-sm" onClick={addPlan}>+ New Practice</button>
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -2,8 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useData, DrillRecord, PracticeBlockRecord } from "@/lib/offline/DataProvider";
-import { createPracticeBlock, deletePracticeBlock, updatePracticeBlock, updatePracticePlan } from "@/lib/offline/actions";
+import {
+  createPracticeBlock,
+  deletePracticeBlock,
+  duplicatePracticePlan,
+  updatePracticeBlock,
+  updatePracticePlan,
+} from "@/lib/offline/actions";
 import { visibleDrills } from "@/lib/practice/drills";
 import { categoryLabel } from "@/lib/practice/constants";
 
@@ -17,10 +24,15 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 const BREAK_PRESETS = [1, 2, 3];
 
 export default function PracticePlanBuilderPage({ params }: { params: { id: string } }) {
-  const { team, drills, drillArchives, practicePlans, practiceBlocks, mutate, ready } = useData();
+  const router = useRouter();
+  const { team, drills, drillArchives, practicePlans, practiceBlocks, mutate, deletePracticePlan, ready } = useData();
   const plan = practicePlans.find((p) => p.id === params.id);
   const [pickingDrill, setPickingDrill] = useState(false);
   const [pickingBreak, setPickingBreak] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateNameDraft, setTemplateNameDraft] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const blocks = useMemo(
     () => practiceBlocks.filter((b) => b.planId === params.id).sort((a, b) => a.order - b.order),
@@ -84,37 +96,74 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
     await updatePracticePlan(mutate, plan!.id, { status: plan!.status === "draft" ? "planned" : "draft" });
   }
 
+  async function saveAsTemplate() {
+    if (!templateNameDraft.trim() || !plan) return;
+    await duplicatePracticePlan(mutate, plan, blocks, { isTemplate: true, templateName: templateNameDraft.trim() });
+    setSavingTemplate(false);
+    setTemplateNameDraft("");
+  }
+
+  async function duplicate() {
+    if (!plan) return;
+    const id = await duplicatePracticePlan(mutate, plan, blocks, {});
+    router.push(`/practice/plans/${id}`);
+  }
+
+  async function doDelete() {
+    if (!plan) return;
+    const result = await deletePracticePlan(plan.id);
+    if (result.ok) {
+      router.push(plan.isTemplate ? "/practice/templates" : "/practice/plans");
+    } else {
+      setDeleteError(result.error ?? "Delete failed.");
+      setConfirmingDelete(false);
+    }
+  }
+
   let offset = 0;
 
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Practice Plan</h1>
-        <button className="btn-secondary text-sm" onClick={toggleStatus}>
-          {plan.status === "draft" ? "Mark as Planned" : "Revert to Draft"}
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-bold">{plan.isTemplate ? "Template" : "Practice Plan"}</h1>
+        {!plan.isTemplate && (
+          <button className="btn-secondary text-sm shrink-0" onClick={toggleStatus}>
+            {plan.status === "draft" ? "Mark as Planned" : "Revert to Draft"}
+          </button>
+        )}
       </div>
 
       <div className="card p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+        {plan.isTemplate ? (
           <div>
-            <p className="label">Date</p>
-            <input
-              type="date"
-              className="input"
-              value={plan.date ? plan.date.slice(0, 10) : ""}
-              onChange={(e) => updatePracticePlan(mutate, plan.id, { date: e.target.value ? new Date(e.target.value).toISOString() : null })}
-            />
-          </div>
-          <div>
-            <p className="label">Location</p>
+            <p className="label">Template name</p>
             <input
               className="input"
-              value={plan.location}
-              onChange={(e) => updatePracticePlan(mutate, plan.id, { location: e.target.value })}
+              value={plan.templateName}
+              onChange={(e) => updatePracticePlan(mutate, plan.id, { templateName: e.target.value })}
             />
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="label">Date</p>
+              <input
+                type="date"
+                className="input"
+                value={plan.date ? plan.date.slice(0, 10) : ""}
+                onChange={(e) => updatePracticePlan(mutate, plan.id, { date: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              />
+            </div>
+            <div>
+              <p className="label">Location</p>
+              <input
+                className="input"
+                value={plan.location}
+                onChange={(e) => updatePracticePlan(mutate, plan.id, { location: e.target.value })}
+              />
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <div>
             <p className="label m-0">Target</p>
@@ -186,6 +235,47 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
             <DrillPicker drills={visibleDrills(drills, drillArchives, team.id)} onPick={addDrill} />
           </div>
         )}
+      </div>
+
+      <div className="card p-4 space-y-3">
+        <p className="label m-0">Reuse</p>
+        <div className="flex gap-2">
+          <button className="btn-secondary flex-1" onClick={duplicate}>Duplicate</button>
+          {!plan.isTemplate && (
+            <button className="btn-secondary flex-1" onClick={() => setSavingTemplate((v) => !v)}>Save as Template</button>
+          )}
+        </div>
+        {savingTemplate && (
+          <div className="flex gap-2 pt-2 border-t border-slate-200">
+            <input
+              className="input flex-1"
+              placeholder="Template name"
+              value={templateNameDraft}
+              onChange={(e) => setTemplateNameDraft(e.target.value)}
+            />
+            <button className="btn-primary" disabled={!templateNameDraft.trim()} onClick={saveAsTemplate}>Save</button>
+          </div>
+        )}
+      </div>
+
+      <div className="card p-4 space-y-2 border-red-200">
+        <p className="label m-0">Danger zone</p>
+        {confirmingDelete ? (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-red-700">
+              Delete this {plan.isTemplate ? "template" : "practice plan"}? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button className="btn-danger flex-1" onClick={doDelete}>Yes, delete</button>
+              <button className="btn-secondary" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn-danger" onClick={() => setConfirmingDelete(true)}>
+            Delete {plan.isTemplate ? "template" : "plan"}
+          </button>
+        )}
+        {deleteError && <p className="text-sm text-red-700">{deleteError}</p>}
       </div>
     </div>
   );

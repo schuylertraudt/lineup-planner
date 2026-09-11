@@ -193,6 +193,8 @@ interface DataContextValue extends DataState {
   deleteGame: (gameId: string) => Promise<{ ok: boolean; error?: string }>;
   /** Permanently deletes a team-owned drill on the server (owner-only, blocked if plan-referenced) and purges it locally. Requires connectivity. */
   deleteDrillPermanently: (drillId: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Deletes a practice plan (and its blocks/attendance) on the server and purges it locally. Requires connectivity. */
+  deletePracticePlan: (planId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -490,6 +492,37 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     return { ok: true };
   }, []);
 
+  const deletePracticePlan = useCallback(async (planId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/practice-plans/${planId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error ?? "Delete failed." };
+      }
+    } catch {
+      return { ok: false, error: "Deleting a practice plan requires an internet connection. Try again once you're online." };
+    }
+
+    const [blocks, attendance] = await Promise.all([
+      getAll<PracticeBlockRecord>("practiceBlocks"),
+      getAll<PracticeAttendanceRecord>("practiceAttendances"),
+    ]);
+    await Promise.all([
+      deleteMany("practicePlans", [planId]),
+      deleteMany("practiceBlocks", blocks.filter((b) => b.planId === planId).map((b) => b.id)),
+      deleteMany("practiceAttendances", attendance.filter((a) => a.planId === planId).map((a) => a.id)),
+    ]);
+
+    setState((prev) => ({
+      ...prev,
+      practicePlans: prev.practicePlans.filter((p) => p.id !== planId),
+      practiceBlocks: prev.practiceBlocks.filter((b) => b.planId !== planId),
+      practiceAttendances: prev.practiceAttendances.filter((a) => a.planId !== planId),
+    }));
+
+    return { ok: true };
+  }, []);
+
   useEffect(() => {
     (async () => {
       await loadFromIndexedDb();
@@ -525,7 +558,18 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
 
   return (
     <DataContext.Provider
-      value={{ ...state, ready, syncStatus, pendingCount, coachId, mutate, refresh, deleteGame, deleteDrillPermanently }}
+      value={{
+        ...state,
+        ready,
+        syncStatus,
+        pendingCount,
+        coachId,
+        mutate,
+        refresh,
+        deleteGame,
+        deleteDrillPermanently,
+        deletePracticePlan,
+      }}
     >
       {children}
     </DataContext.Provider>

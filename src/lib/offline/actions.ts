@@ -231,3 +231,44 @@ export async function updatePracticeBlock(mutate: Mutate, id: string, fields: Re
 export async function deletePracticeBlock(mutate: Mutate, id: string, planId: string) {
   await mutate("practiceBlock", id, { planId }, "delete");
 }
+
+interface DuplicatablePlan {
+  location: string;
+  targetMinutes: number;
+}
+interface DuplicatableBlock {
+  order: number;
+  type: string;
+  drillId: string | null;
+  plannedMinutes: number;
+  blockNotes: string;
+}
+
+/** Copies a plan's (or template's) blocks into a brand-new plan. Used by "duplicate", "save as template", and "new from template". */
+export async function duplicatePracticePlan(
+  mutate: Mutate,
+  source: DuplicatablePlan,
+  sourceBlocks: DuplicatableBlock[],
+  overrides: { date?: string | null; isTemplate?: boolean; templateName?: string; status?: string } = {}
+): Promise<string> {
+  const id = newId();
+  await mutate("practicePlan", id, {
+    date: overrides.date ?? null,
+    location: source.location,
+    targetMinutes: source.targetMinutes,
+    status: overrides.status ?? "draft",
+    notes: "",
+    isTemplate: overrides.isTemplate ?? false,
+    templateName: overrides.templateName ?? "",
+  });
+  for (const block of [...sourceBlocks].sort((a, b) => a.order - b.order)) {
+    await createPracticeBlock(mutate, {
+      planId: id,
+      order: block.order,
+      type: block.type as "drill" | "break" | "talk" | "free_play",
+      drillId: block.drillId,
+      plannedMinutes: block.plannedMinutes,
+    });
+  }
+  return id;
+}
