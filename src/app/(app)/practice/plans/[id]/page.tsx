@@ -16,6 +16,7 @@ import { visibleDrills } from "@/lib/practice/drills";
 import { categoryLabel } from "@/lib/practice/constants";
 import { computePracticeWarnings } from "@/lib/practice/validation";
 import { computeAutoBalance } from "@/lib/practice/autobalance";
+import { DrillInfoSheet } from "@/components/DrillInfoSheet";
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
   drill: "Drill",
@@ -38,6 +39,7 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showWarnings, setShowWarnings] = useState(false);
+  const [infoDrill, setInfoDrill] = useState<DrillRecord | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
 
   const blocks = useMemo(
@@ -255,7 +257,18 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-400 font-semibold">at {startOffset} min</p>
-                <p className="font-semibold truncate">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
+                <div className="flex items-start gap-1.5">
+                  <p className="font-semibold">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
+                  {drill && (
+                    <button
+                      className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-slate-300 text-slate-500 text-xs font-bold leading-none flex items-center justify-center"
+                      onClick={() => setInfoDrill(drill)}
+                      aria-label={`About ${drill.name}`}
+                    >
+                      i
+                    </button>
+                  )}
+                </div>
                 {drill && <p className="text-xs text-slate-500">{categoryLabel(drill.category)}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -291,7 +304,7 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
 
         {pickingDrill && (
           <div className="pt-2 border-t border-slate-200">
-            <DrillPicker drills={visibleDrills(drills, team.id)} onPick={addDrill} />
+            <DrillPicker drills={visibleDrills(drills, team.id)} onPick={addDrill} onInfo={setInfoDrill} />
           </div>
         )}
       </div>
@@ -366,11 +379,21 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
         )}
         {deleteError && <p className="text-sm text-red-700">{deleteError}</p>}
       </div>
+
+      <DrillInfoSheet drill={infoDrill} onClose={() => setInfoDrill(null)} />
     </div>
   );
 }
 
-function DrillPicker({ drills, onPick }: { drills: DrillRecord[]; onPick: (drill: DrillRecord) => void }) {
+function DrillPicker({
+  drills,
+  onPick,
+  onInfo,
+}: {
+  drills: DrillRecord[];
+  onPick: (drill: DrillRecord) => void;
+  onInfo: (drill: DrillRecord) => void;
+}) {
   const [search, setSearch] = useState("");
   const filtered = drills
     .filter((d) => (search.trim() ? d.name.toLowerCase().includes(search.trim().toLowerCase()) : true))
@@ -381,14 +404,19 @@ function DrillPicker({ drills, onPick }: { drills: DrillRecord[]; onPick: (drill
       <input className="input" placeholder="Search drills..." value={search} onChange={(e) => setSearch(e.target.value)} />
       <div className="max-h-64 overflow-y-auto space-y-1">
         {filtered.map((d) => (
-          <button
-            key={d.id}
-            className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 flex items-center justify-between gap-2"
-            onClick={() => onPick(d)}
-          >
-            <span className="font-medium truncate">{d.name}</span>
-            <span className="text-xs text-slate-500 shrink-0">{d.defaultMinutes} min</span>
-          </button>
+          <div key={d.id} className="flex items-center gap-1 rounded-lg hover:bg-slate-100">
+            <button className="flex-1 min-w-0 text-left px-3 py-2 flex items-center justify-between gap-2" onClick={() => onPick(d)}>
+              <span className="font-medium">{d.name}</span>
+              <span className="text-xs text-slate-500 shrink-0">{d.defaultMinutes} min</span>
+            </button>
+            <button
+              className="shrink-0 mr-2 w-5 h-5 rounded-full border border-slate-300 text-slate-500 text-xs font-bold leading-none flex items-center justify-center"
+              onClick={() => onInfo(d)}
+              aria-label={`About ${d.name}`}
+            >
+              i
+            </button>
+          </div>
         ))}
         {filtered.length === 0 && <p className="text-sm text-slate-500 px-1">No drills match.</p>}
       </div>
