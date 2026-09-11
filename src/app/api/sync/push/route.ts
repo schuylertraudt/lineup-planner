@@ -15,12 +15,33 @@ export async function POST(req: NextRequest) {
     for (const mutation of mutations) {
       try {
         const record = await applyMutation(mutation, coach.teamId, coach.id);
-        results.push({ mutationId: mutation.id, entity: mutation.entity, ok: true, record });
+        results.push({
+          mutationId: mutation.id,
+          entity: mutation.entity,
+          entityId: mutation.entityId,
+          op: mutation.op,
+          ok: true,
+          record,
+        });
       } catch (e) {
         if (e instanceof SyncAuthError) {
-          results.push({ mutationId: mutation.id, entity: mutation.entity, ok: false, error: e.message });
+          results.push({
+            mutationId: mutation.id,
+            entity: mutation.entity,
+            entityId: mutation.entityId,
+            op: mutation.op,
+            ok: false,
+            error: e.message,
+          });
         } else {
-          results.push({ mutationId: mutation.id, entity: mutation.entity, ok: false, error: "apply failed" });
+          results.push({
+            mutationId: mutation.id,
+            entity: mutation.entity,
+            entityId: mutation.entityId,
+            op: mutation.op,
+            ok: false,
+            error: "apply failed",
+          });
         }
       }
     }

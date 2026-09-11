@@ -151,6 +151,47 @@ async function main() {
     });
   }
 
+  // Example 30-minute practice plan, matching the seed spec exactly.
+  const planId = randomUUID();
+  const planDate = new Date();
+  planDate.setDate(planDate.getDate() - 3);
+  await prisma.practicePlan.create({
+    data: {
+      id: planId,
+      teamId: team.id,
+      date: planDate,
+      location: "Field 2",
+      targetMinutes: 30,
+      status: "planned",
+      notes: "",
+    },
+  });
+  const planBlocks: { type: string; drillId: string | null; minutes: number }[] = [
+    { type: "drill", drillId: "lib-dribble-tag", minutes: 6 },
+    { type: "break", drillId: null, minutes: 2 },
+    { type: "drill", drillId: "lib-cone-gates", minutes: 8 },
+    { type: "drill", drillId: "lib-3v3-no-keepers", minutes: 10 },
+    { type: "drill", drillId: "lib-crossbar-challenge", minutes: 4 },
+  ];
+  for (let i = 0; i < planBlocks.length; i++) {
+    const b = planBlocks[i];
+    await prisma.practiceBlock.create({
+      data: {
+        id: randomUUID(),
+        planId,
+        order: i,
+        type: b.type,
+        drillId: b.drillId,
+        plannedMinutes: b.minutes,
+      },
+    });
+  }
+  for (const p of players) {
+    await prisma.practiceAttendance.create({
+      data: { id: `${planId}:${p.id}`, planId, playerId: p.id, status: "present" },
+    });
+  }
+
   console.log("Seeded demo team:");
   console.log("  Login: coach@example.com / coachdemo123");
   console.log("  Join code: DEMO1234");

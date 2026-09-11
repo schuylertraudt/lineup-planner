@@ -1,4 +1,15 @@
-export type SyncEntity = "player" | "game" | "availability" | "assignment" | "gamePeriod" | "team";
+export type SyncEntity =
+  | "player"
+  | "game"
+  | "availability"
+  | "assignment"
+  | "gamePeriod"
+  | "team"
+  | "drill"
+  | "drillArchive"
+  | "practicePlan"
+  | "practiceBlock"
+  | "practiceAttendance";
 
 export interface Mutation {
   id: string;
@@ -25,4 +36,12 @@ export function deterministicAssignmentId(
 
 export function deterministicGamePeriodId(gameId: string, periodNumber: number): string {
   return `${gameId}:${periodNumber}`;
+}
+
+export function deterministicDrillArchiveId(teamId: string, drillId: string): string {
+  return `${teamId}:${drillId}`;
+}
+
+export function deterministicPracticeAttendanceId(planId: string, playerId: string): string {
+  return `${planId}:${playerId}`;
 }

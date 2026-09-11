@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from "idb";
 
 export const DB_NAME = "lineup-planner";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export interface OutboxItem {
   id: string;
@@ -31,6 +31,12 @@ export function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains("assignments")) db.createObjectStore("assignments", { keyPath: "id" });
         if (!db.objectStoreNames.contains("gamePeriods")) db.createObjectStore("gamePeriods", { keyPath: "id" });
         if (!db.objectStoreNames.contains("coaches")) db.createObjectStore("coaches", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("drills")) db.createObjectStore("drills", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("drillArchives")) db.createObjectStore("drillArchives", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("practicePlans")) db.createObjectStore("practicePlans", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("practiceBlocks")) db.createObjectStore("practiceBlocks", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("practiceAttendances"))
+          db.createObjectStore("practiceAttendances", { keyPath: "id" });
         if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "id" });
         if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
       },

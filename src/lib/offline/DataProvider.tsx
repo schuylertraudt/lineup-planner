@@ -73,6 +73,68 @@ export interface CoachRecord {
   email: string;
   role: string;
 }
+export interface DrillRecord {
+  id: string;
+  teamId: string | null;
+  name: string;
+  slug: string;
+  category: string;
+  focusAreas: string[];
+  defaultMinutes: number;
+  minMinutes: number | null;
+  maxMinutes: number | null;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  equipment: string[];
+  setup: string;
+  instructions: string;
+  coachingPoints: string[];
+  progressions: string[];
+  ageNotes: string;
+  scope: "library" | "team";
+  sourceDrillId: string | null;
+  archived: boolean;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface DrillArchiveRecord {
+  id: string;
+  teamId: string;
+  drillId: string;
+  updatedAt: string;
+}
+export interface PracticePlanRecord {
+  id: string;
+  teamId: string;
+  date: string | null;
+  location: string;
+  targetMinutes: number;
+  status: string;
+  notes: string;
+  isTemplate: boolean;
+  templateName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface PracticeBlockRecord {
+  id: string;
+  planId: string;
+  order: number;
+  type: string;
+  drillId: string | null;
+  plannedMinutes: number;
+  blockNotes: string;
+  updatedAt: string;
+}
+export interface PracticeAttendanceRecord {
+  id: string;
+  planId: string;
+  playerId: string;
+  status: string;
+  updatedAt: string;
+}
 
 interface DataState {
   team: TeamRecord | null;
@@ -83,6 +145,11 @@ interface DataState {
   assignments: AssignmentRecord[];
   gamePeriods: GamePeriodRecord[];
   coaches: CoachRecord[];
+  drills: DrillRecord[];
+  drillArchives: DrillArchiveRecord[];
+  practicePlans: PracticePlanRecord[];
+  practiceBlocks: PracticeBlockRecord[];
+  practiceAttendances: PracticeAttendanceRecord[];
 }
 
 const EMPTY_STATE: DataState = {
@@ -94,6 +161,11 @@ const EMPTY_STATE: DataState = {
   assignments: [],
   gamePeriods: [],
   coaches: [],
+  drills: [],
+  drillArchives: [],
+  practicePlans: [],
+  practiceBlocks: [],
+  practiceAttendances: [],
 };
 
 function upsertList<T extends { id: string }>(list: T[], record: T): T[] {
@@ -109,7 +181,12 @@ interface DataContextValue extends DataState {
   syncStatus: SyncStatus;
   pendingCount: number;
   coachId: string;
-  mutate: (entity: SyncEntity, entityId: string, fields: Record<string, unknown>) => Promise<void>;
+  mutate: (
+    entity: SyncEntity,
+    entityId: string,
+    fields: Record<string, unknown>,
+    op?: "upsert" | "delete"
+  ) => Promise<void>;
   refresh: () => Promise<void>;
   /** Deletes a game (and everything under it) on the server and purges it locally. Requires connectivity. */
   deleteGame: (gameId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -124,6 +201,11 @@ const STORE_BY_ENTITY: Record<SyncEntity, string> = {
   assignment: "assignments",
   gamePeriod: "gamePeriods",
   team: "team",
+  drill: "drills",
+  drillArchive: "drillArchives",
+  practicePlan: "practicePlans",
+  practiceBlock: "practiceBlocks",
+  practiceAttendance: "practiceAttendances",
 };
 
 export function DataProvider({ coachId, children }: { coachId: string; children: React.ReactNode }) {
@@ -138,7 +220,21 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
   }, []);
 
   const loadFromIndexedDb = useCallback(async () => {
-    const [team, slots, players, games, availabilities, assignments, gamePeriods, coaches] = await Promise.all([
+    const [
+      team,
+      slots,
+      players,
+      games,
+      availabilities,
+      assignments,
+      gamePeriods,
+      coaches,
+      drills,
+      drillArchives,
+      practicePlans,
+      practiceBlocks,
+      practiceAttendances,
+    ] = await Promise.all([
       getAll<TeamRecord>("team"),
       getAll<SlotRecord>("slots"),
       getAll<PlayerRecord>("players"),
@@ -147,6 +243,11 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       getAll<AssignmentRecord>("assignments"),
       getAll<GamePeriodRecord>("gamePeriods"),
       getAll<CoachRecord>("coaches"),
+      getAll<DrillRecord>("drills"),
+      getAll<DrillArchiveRecord>("drillArchives"),
+      getAll<PracticePlanRecord>("practicePlans"),
+      getAll<PracticeBlockRecord>("practiceBlocks"),
+      getAll<PracticeAttendanceRecord>("practiceAttendances"),
     ]);
     setState({
       team: team[0] ?? null,
@@ -157,6 +258,11 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       assignments,
       gamePeriods,
       coaches,
+      drills,
+      drillArchives,
+      practicePlans,
+      practiceBlocks,
+      practiceAttendances,
     });
   }, []);
 
@@ -189,8 +295,14 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
           return;
         }
         for (const item of result.applied) {
-          if (item.ok && item.record) {
-            const store = STORE_BY_ENTITY[item.entity];
+          if (!item.ok) continue;
+          const store = STORE_BY_ENTITY[item.entity];
+          if (item.op === "delete") {
+            await deleteMany(store, [item.entityId]);
+            applyLocal(store as keyof DataState, (prev) => {
+              return (prev as unknown as { id: string }[]).filter((x) => x.id !== item.entityId) as never;
+            });
+          } else if (item.record) {
             await putAll(store, [item.record]);
             applyLocal(store as keyof DataState, (prev) => {
               if (store === "team") return item.record as never;
@@ -221,6 +333,13 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     const availabilities = (result.availabilities as AvailabilityRecord[]).filter((a) => !pendingIds.has(a.id));
     const assignments = (result.assignments as AssignmentRecord[]).filter((a) => !pendingIds.has(a.id));
     const gamePeriods = (result.gamePeriods as GamePeriodRecord[]).filter((g) => !pendingIds.has(g.id));
+    const drills = (result.drills as DrillRecord[]).filter((d) => !pendingIds.has(d.id));
+    const practicePlans = (result.practicePlans as PracticePlanRecord[]).filter((p) => !pendingIds.has(p.id));
+    const practiceBlocks = (result.practiceBlocks as PracticeBlockRecord[]).filter((b) => !pendingIds.has(b.id));
+    const practiceAttendances = (result.practiceAttendances as PracticeAttendanceRecord[]).filter(
+      (a) => !pendingIds.has(a.id)
+    );
+    const drillArchives = (result.drillArchives as DrillArchiveRecord[]).filter((a) => !pendingIds.has(a.id));
 
     await Promise.all([
       putAll("players", players),
@@ -228,12 +347,18 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       putAll("availabilities", availabilities),
       putAll("assignments", assignments),
       putAll("gamePeriods", gamePeriods),
-      // The server always returns its complete, current position-slot and
-      // coach lists (never a delta), so a full replace here is what keeps a
-      // slot template edit (which deletes and recreates every slot under
-      // new ids) from leaving orphaned old rows sitting in IndexedDB forever.
+      putAll("drills", drills),
+      putAll("practicePlans", practicePlans),
+      putAll("practiceBlocks", practiceBlocks),
+      putAll("practiceAttendances", practiceAttendances),
+      // The server always returns its complete, current position-slot,
+      // coach, and drill-archive lists (never a delta), so a full replace
+      // here is what keeps a slot template edit (which deletes and
+      // recreates every slot under new ids) or an un-archived library
+      // drill from leaving orphaned rows sitting in IndexedDB forever.
       replaceAll("slots", result.slots as SlotRecord[]),
       replaceAll("coaches", result.coaches as CoachRecord[]),
+      replaceAll("drillArchives", drillArchives),
     ]);
     if (result.team) await putAll("team", [result.team]);
 
@@ -246,7 +371,12 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       for (const a of availabilities) next.availabilities = upsertList(next.availabilities, a);
       for (const a of assignments) next.assignments = upsertList(next.assignments, a);
       for (const g of gamePeriods) next.gamePeriods = upsertList(next.gamePeriods, g);
+      for (const d of drills) next.drills = upsertList(next.drills, d);
+      for (const p of practicePlans) next.practicePlans = upsertList(next.practicePlans, p);
+      for (const b of practiceBlocks) next.practiceBlocks = upsertList(next.practiceBlocks, b);
+      for (const a of practiceAttendances) next.practiceAttendances = upsertList(next.practiceAttendances, a);
       next.coaches = result.coaches as CoachRecord[];
+      next.drillArchives = drillArchives;
       return next;
     });
 
@@ -254,30 +384,43 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
   }, []);
 
   const mutate = useCallback(
-    async (entity: SyncEntity, entityId: string, fields: Record<string, unknown>) => {
+    async (
+      entity: SyncEntity,
+      entityId: string,
+      fields: Record<string, unknown>,
+      op: "upsert" | "delete" = "upsert"
+    ) => {
       const updatedAt = new Date().toISOString();
       const store = STORE_BY_ENTITY[entity];
 
-      setState((prev) => {
-        if (store === "team") {
-          return { ...prev, team: prev.team ? { ...prev.team, ...fields, id: entityId } as TeamRecord : ({ id: entityId, ...fields } as TeamRecord) };
-        }
-        const list = prev[store as keyof DataState] as unknown as { id: string; updatedAt?: string }[];
-        const idx = list.findIndex((x) => x.id === entityId);
-        const merged = idx === -1 ? { id: entityId, ...fields, updatedAt } : { ...list[idx], ...fields, updatedAt };
-        return { ...prev, [store]: upsertList(list, merged as { id: string }) };
-      });
+      if (op === "delete") {
+        setState((prev) => ({
+          ...prev,
+          [store]: (prev[store as keyof DataState] as unknown as { id: string }[]).filter((x) => x.id !== entityId),
+        }));
+        await deleteMany(store, [entityId]);
+      } else {
+        setState((prev) => {
+          if (store === "team") {
+            return { ...prev, team: prev.team ? { ...prev.team, ...fields, id: entityId } as TeamRecord : ({ id: entityId, ...fields } as TeamRecord) };
+          }
+          const list = prev[store as keyof DataState] as unknown as { id: string; updatedAt?: string }[];
+          const idx = list.findIndex((x) => x.id === entityId);
+          const merged = idx === -1 ? { id: entityId, ...fields, updatedAt } : { ...list[idx], ...fields, updatedAt };
+          return { ...prev, [store]: upsertList(list, merged as { id: string }) };
+        });
 
-      const current = await getAll<{ id: string }>(store);
-      const existing = current.find((x) => x.id === entityId);
-      const merged = existing ? { ...existing, ...fields, updatedAt } : { id: entityId, ...fields, updatedAt };
-      await putAll(store, [merged]);
+        const current = await getAll<{ id: string }>(store);
+        const existing = current.find((x) => x.id === entityId);
+        const merged = existing ? { ...existing, ...fields, updatedAt } : { id: entityId, ...fields, updatedAt };
+        await putAll(store, [merged]);
+      }
 
       await enqueueMutation({
         id: uuid(),
         entity,
         entityId,
-        op: "upsert",
+        op,
         fields,
         updatedAt,
         coachId,

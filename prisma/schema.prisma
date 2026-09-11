@@ -14,13 +14,17 @@ model Team {
   seasonLabel        String   @default("")
   playersOnField     Int      @default(8)
   defaultPeriodCount Int      @default(4)
+  targetMinutes      Int      @default(30)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  coaches Coach[]
-  players Player[]
-  games   Game[]
-  slots   PositionSlot[]
+  coaches       Coach[]
+  players       Player[]
+  games         Game[]
+  slots         PositionSlot[]
+  drills        Drill[]
+  drillArchives DrillArchive[]
+  practicePlans PracticePlan[]
 }
 
 model PositionSlot {
@@ -37,15 +41,15 @@ model PositionSlot {
 }
 
 model Coach {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  name         String
-  role         String    @default("coach")
-  teamId       String?
-  team         Team?     @relation(fields: [teamId], references: [id])
-  createdAt    DateTime  @default(now())
-  sessions     Session[]
+  id             String          @id @default(cuid())
+  email          String          @unique
+  passwordHash   String
+  name           String
+  role           String          @default("coach")
+  teamId         String?
+  team           Team?           @relation(fields: [teamId], references: [id])
+  createdAt      DateTime        @default(now())
+  sessions       Session[]
   passwordResets PasswordReset[]
 }
 
@@ -81,8 +85,9 @@ model Player {
   updatedAt       DateTime @updatedAt
   fieldTimestamps Json     @default("{}")
 
-  availabilities Availability[]
-  assignments    Assignment[]
+  availabilities      Availability[]
+  assignments         Assignment[]
+  practiceAttendances PracticeAttendance[]
 }
 
 model Game {
@@ -142,4 +147,97 @@ model Assignment {
   updatedByCoachId String?
 
   @@unique([gameId, periodNumber, slotIndex, isActual])
+}
+
+// ---------------------------------------------------------------------------
+// Practice planning. Minute-based, deliberately separate from the
+// period-based game side above — see the practice module design notes.
+// ---------------------------------------------------------------------------
+
+model Drill {
+  id              String   @id
+  teamId          String? // null = shared library drill, visible to every team
+  team            Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String   @default("")
+  category        String // warmup | technical | small_sided_game | scrimmage | fun_finisher
+  focusAreas      String[] @default([])
+  defaultMinutes  Int
+  minMinutes      Int?
+  maxMinutes      Int?
+  minPlayers      Int?
+  maxPlayers      Int?
+  equipment       String[] @default([])
+  setup           String   @default("")
+  instructions    String   @default("")
+  coachingPoints  String[] @default([])
+  progressions    String[] @default([])
+  ageNotes        String   @default("")
+  scope           String   @default("team") // library | team
+  sourceDrillId   String?
+  archived        Boolean  @default(false) // team-scoped drills only; library drills use DrillArchive
+  createdBy       String?
+  updatedBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  fieldTimestamps Json     @default("{}")
+
+  blocks      PracticeBlock[]
+  archivedFor DrillArchive[]
+}
+
+/// Per-team hide of a shared library drill - archiving a library drill must never affect other teams.
+model DrillArchive {
+  id        String   @id // `${teamId}:${drillId}`
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  drillId   String
+  drill     Drill    @relation(fields: [drillId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, drillId])
+}
+
+model PracticePlan {
+  id              String    @id
+  teamId          String
+  team            Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  date            DateTime?
+  location        String    @default("")
+  targetMinutes   Int       @default(30)
+  status          String    @default("draft") // draft | planned
+  notes           String    @default("")
+  isTemplate      Boolean   @default(false)
+  templateName    String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  fieldTimestamps Json      @default("{}")
+
+  blocks     PracticeBlock[]
+  attendance PracticeAttendance[]
+}
+
+model PracticeBlock {
+  id             String       @id
+  planId         String
+  plan           PracticePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  order          Int
+  type           String // drill | break | talk | free_play
+  drillId        String?
+  drill          Drill?       @relation(fields: [drillId], references: [id])
+  plannedMinutes Int
+  blockNotes     String       @default("")
+  updatedAt      DateTime     @updatedAt
+}
+
+model PracticeAttendance {
+  id        String       @id // `${planId}:${playerId}`
+  planId    String
+  plan      PracticePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  playerId  String
+  player    Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  status    String       @default("present") // present | absent
+  updatedAt DateTime     @updatedAt
+
+  @@unique([planId, playerId])
 }

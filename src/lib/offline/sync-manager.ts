@@ -13,6 +13,11 @@ export interface PullResult {
   assignments: unknown[];
   gamePeriods: unknown[];
   coaches: unknown[];
+  drills: unknown[];
+  drillArchives: unknown[];
+  practicePlans: unknown[];
+  practiceBlocks: unknown[];
+  practiceAttendances: unknown[];
 }
 
 export async function pullFromServer(since: string | undefined): Promise<PullResult | null> {
@@ -29,8 +34,10 @@ export async function pullFromServer(since: string | undefined): Promise<PullRes
 export interface PushResultItem {
   mutationId: string;
   entity: SyncEntity;
+  entityId: string;
+  op: "upsert" | "delete";
   ok: boolean;
-  record?: Record<string, unknown>;
+  record?: Record<string, unknown> | null;
   error?: string;
 }
 
