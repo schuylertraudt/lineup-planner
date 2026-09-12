@@ -517,12 +517,10 @@ function PeriodEditor({
                 return (
                   <div
                     key={w.playerId}
-                    className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${
-                      w.severity === "red" ? "bg-red-50 border border-red-200" : "bg-amber-50 border border-amber-200"
-                    }`}
+                    className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-red-50 border border-red-200"
                   >
                     <span className="font-semibold text-sm">{displayName(player)}</span>
-                    <span className={`text-xs font-semibold ${w.severity === "red" ? "text-red-700" : "text-amber-700"}`}>
+                    <span className="text-xs font-semibold text-red-700">
                       {w.reasons.join(" · ")}
                     </span>
                   </div>

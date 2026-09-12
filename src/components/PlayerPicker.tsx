@@ -73,9 +73,7 @@ export function PlayerPicker({
                 )}
                 {resultingWarning && (
                   <span
-                    className={`ml-2 text-xs font-bold px-1.5 py-0.5 rounded ${
-                      resultingWarning.severity === "red" ? "text-red-700 bg-red-100" : "text-amber-700 bg-amber-100"
-                    }`}
+                    className="ml-2 text-xs font-bold px-1.5 py-0.5 rounded text-red-700 bg-red-100"
                     title={resultingWarning.reasons.join(" · ")}
                   >
                     🚩 {resultingWarning.reasons.join(" · ")}
