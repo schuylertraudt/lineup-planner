@@ -22,16 +22,14 @@ import { displayName, emptyTotals, PlayerSeasonTotals, SlotTemplate } from "@/li
 import { PlayerPicker, PickerCandidate } from "@/components/PlayerPicker";
 import { PositionGroupTally } from "@/components/PositionGroupTally";
 
-type Mode = "plan" | "live";
-
 export default function GamePage({ params }: { params: { id: string } }) {
   const gameId = params.id;
   const router = useRouter();
   const { games, players, slots, availabilities, assignments, gamePeriods, mutate, deleteGame, ready } = useData();
   const game = games.find((g) => g.id === gameId);
 
-  const [mode, setMode] = useState<Mode>("plan");
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [editingGame, setEditingGame] = useState(false);
   const [editOpponent, setEditOpponent] = useState("");
@@ -67,30 +65,29 @@ export default function GamePage({ params }: { params: { id: string } }) {
     () => computeSeasonTotals(assignments, slots, gamePeriods, availabilities, activePlayers.map((p) => p.id)),
     [assignments, slots, gamePeriods, availabilities, activePlayers]
   );
-  const isActual = mode === "live";
   const gamePlanCounts = useMemo(
-    () => computeGamePlanCounts(assignments, gameId, isActual),
-    [assignments, gameId, isActual]
+    () => computeGamePlanCounts(assignments, gameId, false),
+    [assignments, gameId]
   );
   const gamePlanGroupTotals = useMemo(
-    () => computeGamePlanGroupTotals(assignments, gameId, slots, isActual),
-    [assignments, gameId, slots, isActual]
+    () => computeGamePlanGroupTotals(assignments, gameId, slots, false),
+    [assignments, gameId, slots]
   );
   const gameWarnings = useMemo(
-    () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, isActual, availablePlayerIds, slots) : []),
-    [assignments, gameId, game, isActual, availablePlayerIds, slots]
+    () => (game ? computeGameWarnings(assignments, gameId, game.periodCount, false, availablePlayerIds, slots) : []),
+    [assignments, gameId, game, availablePlayerIds, slots]
   );
   const swapSuggestions = useMemo(
     () =>
       game
-        ? computeSwapSuggestions(assignments, gameId, game.periodCount, isActual, availablePlayerIds, slots, activePlayers)
+        ? computeSwapSuggestions(assignments, gameId, game.periodCount, false, availablePlayerIds, slots, activePlayers)
         : [],
-    [assignments, gameId, game, isActual, availablePlayerIds, slots, activePlayers]
+    [assignments, gameId, game, availablePlayerIds, slots, activePlayers]
   );
 
   async function applySuggestion(suggestion: SwapSuggestion) {
     for (const change of suggestion.changes) {
-      await setAssignment(mutate, gameId, change.periodNumber, change.slotIndex, change.playerId, isActual);
+      await setAssignment(mutate, gameId, change.periodNumber, change.slotIndex, change.playerId, false);
     }
   }
 
@@ -114,7 +111,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
   }
 
   function buildCandidates(periodNumber: number, excludeSlotIndex: number): PickerCandidate[] {
-    const periodAssignments = getPeriodAssignments(assignments, gameId, periodNumber, isActual);
+    const periodAssignments = getPeriodAssignments(assignments, gameId, periodNumber, false);
     return availablePlayerIds
       .map((id) => activePlayers.find((p) => p.id === id)!)
       .filter(Boolean)
@@ -127,7 +124,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
           assignments,
           gameId,
           periodCount,
-          isActual,
+          false,
           availablePlayerIds,
           slots,
           periodNumber,
@@ -138,17 +135,17 @@ export default function GamePage({ params }: { params: { id: string } }) {
   }
 
   async function handleSelectPlayer(periodNumber: number, slotIndex: number, playerId: string) {
-    const periodAssignments = getPeriodAssignments(assignments, gameId, periodNumber, isActual);
+    const periodAssignments = getPeriodAssignments(assignments, gameId, periodNumber, false);
     const existingElsewhere = periodAssignments.find((a) => a.playerId === playerId && a.slotIndex !== slotIndex);
     if (existingElsewhere) {
-      await setAssignment(mutate, gameId, periodNumber, existingElsewhere.slotIndex, null, isActual);
+      await setAssignment(mutate, gameId, periodNumber, existingElsewhere.slotIndex, null, false);
     }
-    await setAssignment(mutate, gameId, periodNumber, slotIndex, playerId, isActual);
+    await setAssignment(mutate, gameId, periodNumber, slotIndex, playerId, false);
     setPicker(null);
   }
 
   async function handleClearSlot(periodNumber: number, slotIndex: number) {
-    await setAssignment(mutate, gameId, periodNumber, slotIndex, null, isActual);
+    await setAssignment(mutate, gameId, periodNumber, slotIndex, null, false);
     setPicker(null);
   }
 
@@ -182,35 +179,26 @@ export default function GamePage({ params }: { params: { id: string } }) {
     }
   }
 
-  async function startGame() {
-    await updateGame(mutate, gameId, { status: "in_progress" });
-    setMode("live");
-  }
-
-  async function startPeriod(periodNumber: number) {
-    await setGamePeriodStatus(mutate, gameId, periodNumber, "in_progress", { startedAt: new Date().toISOString() });
-    // Seed the actual layer from the plan the first time this period goes live.
-    for (const slot of slotTemplate) {
-      const actual = getAssignment(assignments, gameId, periodNumber, slot.index, true);
-      if (!actual) {
-        const planned = getAssignment(assignments, gameId, periodNumber, slot.index, false)?.playerId ?? null;
-        await setAssignment(mutate, gameId, periodNumber, slot.index, planned, true);
+  async function handleMarkComplete() {
+    const ok = window.confirm(
+      "Mark this game complete? This locks in the current plan as the official record for every period and counts it toward season fairness totals."
+    );
+    if (!ok) return;
+    setCompleting(true);
+    for (let p = 1; p <= periodCount; p++) {
+      for (const slot of slotTemplate) {
+        const planned = getAssignment(assignments, gameId, p, slot.index, false)?.playerId ?? null;
+        await setAssignment(mutate, gameId, p, slot.index, planned, true);
       }
+      await setGamePeriodStatus(mutate, gameId, p, "completed", { completedAt: new Date().toISOString() });
     }
-  }
-
-  async function completePeriod(periodNumber: number) {
-    await setGamePeriodStatus(mutate, gameId, periodNumber, "completed", { completedAt: new Date().toISOString() });
-    if (periodNumber < periodCount) setSelectedPeriod(periodNumber + 1);
-  }
-
-  async function finishGame() {
     await updateGame(mutate, gameId, { status: "final" });
+    setCompleting(false);
   }
 
   async function handleResetToPlanned() {
     const ok = window.confirm(
-      "Reset this game back to Planned? This clears every live assignment and period's start/complete progress. Your draft plan is untouched."
+      "Reset this game back to Planned? This clears the recorded record for every period. Your draft plan is untouched."
     );
     if (!ok) return;
     setResetting(true);
@@ -222,7 +210,6 @@ export default function GamePage({ params }: { params: { id: string } }) {
     }
     await updateGame(mutate, gameId, { status: "planned" });
     setResetting(false);
-    setMode("plan");
   }
 
   function startEditGame() {
@@ -295,7 +282,12 @@ export default function GamePage({ params }: { params: { id: string } }) {
       ) : (
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h1 className="text-xl font-bold">vs {game.opponent}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">vs {game.opponent}</h1>
+              {game.status === "final" && (
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 shrink-0">Final</span>
+              )}
+            </div>
             <p className="text-sm text-slate-500">
               {new Date(game.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
               {game.location ? ` · ${game.location}` : ""} · {periodCount} periods
@@ -311,31 +303,16 @@ export default function GamePage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button className={`btn-secondary flex-1 ${mode === "plan" ? "!bg-field !text-white !border-field" : ""}`} onClick={() => setMode("plan")}>
-          Plan
-        </button>
-        <button
-          className={`btn-secondary flex-1 ${mode === "live" ? "!bg-field !text-white !border-field" : ""}`}
-          onClick={() => setMode("live")}
-        >
-          Live
-        </button>
-      </div>
-
-      {mode === "live" && game.status === "planned" && (
-        <div className="card p-4 text-center space-y-3">
-          <p className="text-slate-600">Start the game to begin tracking actual assignments period by period.</p>
-          <button className="btn-primary w-full" onClick={startGame}>Start game</button>
-        </div>
-      )}
-
-      {mode === "live" && game.status !== "planned" && (
+      {game.status === "final" ? (
         <div className="flex justify-end">
           <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleResetToPlanned} disabled={resetting}>
             {resetting ? "Resetting..." : "Reset to Planned"}
           </button>
         </div>
+      ) : (
+        <button className="btn-primary w-full" onClick={handleMarkComplete} disabled={completing}>
+          {completing ? "Marking complete..." : "Mark Game Complete"}
+        </button>
       )}
 
       <div className="card">
@@ -376,94 +353,65 @@ export default function GamePage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {mode === "plan" && (
-        <div className="flex gap-2">
-          <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(false)}>Auto-fill empty</button>
-          <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(true)}>Reset &amp; auto-fill</button>
-        </div>
-      )}
+      <div className="flex gap-2">
+        <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(false)}>Auto-fill empty</button>
+        <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(true)}>Reset &amp; auto-fill</button>
+      </div>
 
-      {(mode === "plan" || game.status !== "planned") && (
-        <>
-          <div className="flex gap-1 overflow-x-auto pb-1">
-            {Array.from({ length: periodCount }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                onClick={() => {
-                  setSelectedPeriod(p);
-                  setViewAll(false);
-                }}
-                className={`shrink-0 min-h-touch px-4 rounded-lg font-semibold text-sm ${
-                  !viewAll && selectedPeriod === p ? "bg-field text-white" : "bg-white border-2 border-slate-200 text-slate-600"
-                }`}
-              >
-                P{p}
-                {mode === "live" && periodStatus(p) === "completed" && " ✓"}
-              </button>
-            ))}
-            <button
-              onClick={() => setViewAll(true)}
-              className={`shrink-0 min-h-touch px-4 rounded-lg font-semibold text-sm ${
-                viewAll ? "bg-field text-white" : "bg-white border-2 border-slate-200 text-slate-600"
-              }`}
-            >
-              All
-            </button>
-          </div>
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {Array.from({ length: periodCount }, (_, i) => i + 1).map((p) => (
+          <button
+            key={p}
+            onClick={() => {
+              setSelectedPeriod(p);
+              setViewAll(false);
+            }}
+            className={`shrink-0 min-h-touch px-4 rounded-lg font-semibold text-sm ${
+              !viewAll && selectedPeriod === p ? "bg-field text-white" : "bg-white border-2 border-slate-200 text-slate-600"
+            }`}
+          >
+            P{p}
+          </button>
+        ))}
+        <button
+          onClick={() => setViewAll(true)}
+          className={`shrink-0 min-h-touch px-4 rounded-lg font-semibold text-sm ${
+            viewAll ? "bg-field text-white" : "bg-white border-2 border-slate-200 text-slate-600"
+          }`}
+        >
+          All
+        </button>
+      </div>
 
-          {viewAll ? (
-            <AllPeriodsGrid
-              periodCount={periodCount}
-              slotTemplate={slotTemplate}
-              assignments={assignments}
-              gameId={gameId}
-              isActual={isActual}
-              players={activePlayers}
-              onCellTap={(p, s) => {
-                setSelectedPeriod(p);
-                setViewAll(false);
-                setPicker({ periodNumber: p, slotIndex: s });
-              }}
-            />
-          ) : (
-            <PeriodEditor
-              periodNumber={selectedPeriod}
-              slotTemplate={slotTemplate}
-              assignments={assignments}
-              gameId={gameId}
-              isActual={isActual}
-              players={activePlayers}
-              availablePlayerIds={availablePlayerIds}
-              gamePlanCounts={gamePlanCounts}
-              gamePlanGroupTotals={gamePlanGroupTotals}
-              seasonTotals={seasonTotals}
-              gameWarnings={gameWarnings}
-              swapSuggestions={swapSuggestions}
-              onApplySuggestion={applySuggestion}
-              onSlotTap={(slotIndex) => setPicker({ periodNumber: selectedPeriod, slotIndex })}
-            />
-          )}
-
-          {mode === "live" && !viewAll && (
-            <div className="card p-3 space-y-2">
-              {periodStatus(selectedPeriod) !== "in_progress" && periodStatus(selectedPeriod) !== "completed" && (
-                <button className="btn-primary w-full" onClick={() => startPeriod(selectedPeriod)}>
-                  Start period {selectedPeriod}
-                </button>
-              )}
-              {periodStatus(selectedPeriod) === "in_progress" && (
-                <button className="btn-primary w-full" onClick={() => completePeriod(selectedPeriod)}>
-                  Complete period {selectedPeriod}
-                </button>
-              )}
-              {periodStatus(selectedPeriod) === "completed" && selectedPeriod === periodCount && game.status !== "final" && (
-                <button className="btn-primary w-full" onClick={finishGame}>
-                  Finish game
-                </button>
-              )}
-            </div>
-          )}
-        </>
+      {viewAll ? (
+        <AllPeriodsGrid
+          periodCount={periodCount}
+          slotTemplate={slotTemplate}
+          assignments={assignments}
+          gameId={gameId}
+          players={activePlayers}
+          onCellTap={(p, s) => {
+            setSelectedPeriod(p);
+            setViewAll(false);
+            setPicker({ periodNumber: p, slotIndex: s });
+          }}
+        />
+      ) : (
+        <PeriodEditor
+          periodNumber={selectedPeriod}
+          slotTemplate={slotTemplate}
+          assignments={assignments}
+          gameId={gameId}
+          players={activePlayers}
+          availablePlayerIds={availablePlayerIds}
+          gamePlanCounts={gamePlanCounts}
+          gamePlanGroupTotals={gamePlanGroupTotals}
+          seasonTotals={seasonTotals}
+          gameWarnings={gameWarnings}
+          swapSuggestions={swapSuggestions}
+          onApplySuggestion={applySuggestion}
+          onSlotTap={(slotIndex) => setPicker({ periodNumber: selectedPeriod, slotIndex })}
+        />
       )}
 
       {picker && (
@@ -486,7 +434,6 @@ function PeriodEditor({
   slotTemplate,
   assignments,
   gameId,
-  isActual,
   players,
   availablePlayerIds,
   gamePlanCounts,
@@ -501,7 +448,6 @@ function PeriodEditor({
   slotTemplate: SlotTemplate[];
   assignments: AssignmentRecord[];
   gameId: string;
-  isActual: boolean;
   players: { id: string; firstName: string; lastNameInitial: string; jerseyNumber: string }[];
   availablePlayerIds: string[];
   gameWarnings: GameWarning[];
@@ -516,7 +462,7 @@ function PeriodEditor({
   const [showTotals, setShowTotals] = useState(false);
   const playerById = (id: string | null) => (id ? players.find((p) => p.id === id) : undefined);
   const assignedIds = new Set(
-    getPeriodAssignments(assignments, gameId, periodNumber, isActual)
+    getPeriodAssignments(assignments, gameId, periodNumber, false)
       .map((a) => a.playerId)
       .filter(Boolean) as string[]
   );
@@ -526,7 +472,7 @@ function PeriodEditor({
     <div className="space-y-3">
       <div className="card divide-y divide-slate-100">
         {slotTemplate.map((slot) => {
-          const assignment = getAssignment(assignments, gameId, periodNumber, slot.index, isActual);
+          const assignment = getAssignment(assignments, gameId, periodNumber, slot.index, false);
           const player = playerById(assignment?.playerId ?? null);
           return (
             <button key={slot.index} className="w-full flex items-center justify-between px-4 py-3 min-h-touch text-left" onClick={() => onSlotTap(slot.index)}>
@@ -632,7 +578,6 @@ function AllPeriodsGrid({
   slotTemplate,
   assignments,
   gameId,
-  isActual,
   players,
   onCellTap,
 }: {
@@ -640,7 +585,6 @@ function AllPeriodsGrid({
   slotTemplate: SlotTemplate[];
   assignments: AssignmentRecord[];
   gameId: string;
-  isActual: boolean;
   players: { id: string; firstName: string; lastNameInitial: string }[];
   onCellTap: (periodNumber: number, slotIndex: number) => void;
 }) {
@@ -666,7 +610,7 @@ function AllPeriodsGrid({
             <tr key={p} className="border-b border-slate-100">
               <td className="px-3 py-2 font-semibold">P{p}</td>
               {slotTemplate.map((slot) => {
-                const a = getAssignment(assignments, gameId, p, slot.index, isActual);
+                const a = getAssignment(assignments, gameId, p, slot.index, false);
                 return (
                   <td key={slot.index} className="px-3 py-2 whitespace-nowrap">
                     <button className="min-h-touch" onClick={() => onCellTap(p, slot.index)}>
