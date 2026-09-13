@@ -31,6 +31,7 @@ export default function GamePage({ params }: { params: { id: string } }) {
   const [deleting, setDeleting] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [editingGame, setEditingGame] = useState(false);
   const [editOpponent, setEditOpponent] = useState("");
   const [editDate, setEditDate] = useState("");
@@ -196,6 +197,20 @@ export default function GamePage({ params }: { params: { id: string } }) {
     setCompleting(false);
   }
 
+  async function handleClearLineup() {
+    const ok = window.confirm(
+      "Clear the entire planned lineup for this game? Every period's assignments will be removed. This cannot be undone."
+    );
+    if (!ok) return;
+    setClearing(true);
+    for (let p = 1; p <= periodCount; p++) {
+      for (const slot of slotTemplate) {
+        await setAssignment(mutate, gameId, p, slot.index, null, false);
+      }
+    }
+    setClearing(false);
+  }
+
   async function handleResetToPlanned() {
     const ok = window.confirm(
       "Reset this game back to Planned? This clears the recorded record for every period. Your draft plan is untouched."
@@ -295,10 +310,12 @@ export default function GamePage({ params }: { params: { id: string } }) {
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <Link href={`/games/${gameId}/report`} className="btn-secondary text-sm">Report</Link>
-            <button className="text-xs font-semibold text-field min-h-touch px-1" onClick={startEditGame}>Edit</button>
-            <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleDeleteGame} disabled={deleting}>
-              {deleting ? "Deleting..." : "Delete game"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="text-xs font-semibold text-field min-h-touch px-1" onClick={startEditGame}>Edit</button>
+              <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleDeleteGame} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete game"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -356,6 +373,11 @@ export default function GamePage({ params }: { params: { id: string } }) {
       <div className="flex gap-2">
         <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(false)}>Auto-fill empty</button>
         <button className="btn-secondary flex-1 text-sm" onClick={() => runAutofill(true)}>Reset &amp; auto-fill</button>
+      </div>
+      <div className="flex justify-end">
+        <button className="text-xs text-red-700 font-semibold min-h-touch px-1" onClick={handleClearLineup} disabled={clearing}>
+          {clearing ? "Clearing..." : "Clear lineup"}
+        </button>
       </div>
 
       <div className="flex gap-1 overflow-x-auto pb-1">
