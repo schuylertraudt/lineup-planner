@@ -12,7 +12,7 @@ import {
   updatePracticeBlock,
   updatePracticePlan,
 } from "@/lib/offline/actions";
-import { visibleDrills } from "@/lib/practice/drills";
+import { visibleDrills, blockDrills } from "@/lib/practice/drills";
 import { categoryLabel } from "@/lib/practice/constants";
 import { computePracticeWarnings } from "@/lib/practice/validation";
 import { computeAutoBalance } from "@/lib/practice/autobalance";
@@ -23,6 +23,7 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
   break: "Break",
   talk: "Talk",
   free_play: "Free Play",
+  split: "Split",
 };
 
 const BREAK_PRESETS = [1, 2, 3];
@@ -34,6 +35,8 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
   const plan = practicePlans.find((p) => p.id === params.id);
   const [pickingDrill, setPickingDrill] = useState(false);
   const [pickingBreak, setPickingBreak] = useState(false);
+  const [pickingSplit, setPickingSplit] = useState(false);
+  const [splitDraftA, setSplitDraftA] = useState<DrillRecord | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateNameDraft, setTemplateNameDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -82,6 +85,19 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
   async function addDrill(drill: DrillRecord) {
     await createPracticeBlock(mutate, { planId: plan!.id, order: nextOrder(), type: "drill", drillId: drill.id, plannedMinutes: drill.defaultMinutes });
     setPickingDrill(false);
+  }
+
+  async function addSplit(drillA: DrillRecord, drillB: DrillRecord) {
+    await createPracticeBlock(mutate, {
+      planId: plan!.id,
+      order: nextOrder(),
+      type: "split",
+      drillId: drillA.id,
+      drillIdB: drillB.id,
+      plannedMinutes: Math.max(drillA.defaultMinutes, drillB.defaultMinutes),
+    });
+    setPickingSplit(false);
+    setSplitDraftA(null);
   }
 
   async function addBreak(minutes: number) {
@@ -249,6 +265,7 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
           const startOffset = offset;
           offset += block.plannedMinutes;
           const drill = block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
+          const stationLabels = [block.stationLabel, block.stationLabelB];
           return (
             <div key={block.id} className="card p-3 flex items-center gap-2">
               <div className="flex flex-col">
@@ -257,19 +274,42 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-400 font-semibold">at {startOffset} min</p>
-                <div className="flex items-start gap-1.5">
-                  <p className="text-sm font-semibold leading-snug">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
-                  {drill && (
-                    <button
-                      className="shrink-0 mt-0.5 w-4 h-4 rounded-full border border-slate-300 text-slate-500 text-[10px] font-bold leading-none flex items-center justify-center"
-                      onClick={() => setInfoDrill(drill)}
-                      aria-label={`About ${drill.name}`}
-                    >
-                      i
-                    </button>
-                  )}
-                </div>
-                {drill && <p className="text-xs text-slate-500">{categoryLabel(drill.category)}</p>}
+                {block.type === "split" ? (
+                  <div className="space-y-1">
+                    {blockDrills(block, drills).map((d, idx) => (
+                      <div key={d.id}>
+                        <p className="text-xs font-bold text-field uppercase">{stationLabels[idx]}</p>
+                        <div className="flex items-start gap-1.5">
+                          <p className="text-sm font-semibold leading-snug">{d.name}</p>
+                          <button
+                            className="shrink-0 mt-0.5 w-4 h-4 rounded-full border border-slate-300 text-slate-500 text-[10px] font-bold leading-none flex items-center justify-center"
+                            onClick={() => setInfoDrill(d)}
+                            aria-label={`About ${d.name}`}
+                          >
+                            i
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500">{categoryLabel(d.category)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-1.5">
+                      <p className="text-sm font-semibold leading-snug">{drill ? drill.name : BLOCK_TYPE_LABELS[block.type] ?? block.type}</p>
+                      {drill && (
+                        <button
+                          className="shrink-0 mt-0.5 w-4 h-4 rounded-full border border-slate-300 text-slate-500 text-[10px] font-bold leading-none flex items-center justify-center"
+                          onClick={() => setInfoDrill(drill)}
+                          aria-label={`About ${drill.name}`}
+                        >
+                          i
+                        </button>
+                      )}
+                    </div>
+                    {drill && <p className="text-xs text-slate-500">{categoryLabel(drill.category)}</p>}
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button className="btn-secondary !min-h-0 !min-w-0 w-8 h-8 text-lg" onClick={() => step(block, -1)}>-</button>
@@ -286,11 +326,40 @@ export default function PracticePlanBuilderPage({ params }: { params: { id: stri
       <div className="card p-4 space-y-3">
         <p className="label m-0">Add a block</p>
         <div className="grid grid-cols-2 gap-2">
-          <button className="btn-secondary" onClick={() => { setPickingDrill((v) => !v); setPickingBreak(false); }}>+ Drill</button>
-          <button className="btn-secondary" onClick={() => { setPickingBreak((v) => !v); setPickingDrill(false); }}>+ Break</button>
+          <button
+            className="btn-secondary"
+            onClick={() => { setPickingDrill((v) => !v); setPickingBreak(false); setPickingSplit(false); setSplitDraftA(null); }}
+          >
+            + Drill
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => { setPickingBreak((v) => !v); setPickingDrill(false); setPickingSplit(false); setSplitDraftA(null); }}
+          >
+            + Break
+          </button>
           <button className="btn-secondary" onClick={addTalk}>+ Talk</button>
           <button className="btn-secondary" onClick={addFreePlay}>+ Free Play</button>
+          <button
+            className="btn-secondary col-span-2"
+            onClick={() => { setPickingSplit((v) => !v); setPickingDrill(false); setPickingBreak(false); setSplitDraftA(null); }}
+          >
+            + Split (two drills at once)
+          </button>
         </div>
+
+        {pickingSplit && (
+          <div className="pt-2 border-t border-slate-200 space-y-2">
+            <p className="text-sm font-semibold text-slate-600">
+              {splitDraftA ? `Group A: ${splitDraftA.name} — now pick Group B's drill` : "Pick Group A's drill"}
+            </p>
+            <DrillPicker
+              drills={visibleDrills(drills, team.id).filter((d) => d.id !== splitDraftA?.id)}
+              onPick={(d) => (splitDraftA ? addSplit(splitDraftA, d) : setSplitDraftA(d))}
+              onInfo={setInfoDrill}
+            />
+          </div>
+        )}
 
         {pickingBreak && (
           <div className="flex gap-2 pt-2 border-t border-slate-200">

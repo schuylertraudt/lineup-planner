@@ -1,4 +1,5 @@
 import { DrillRecord, PracticeBlockRecord, PracticePlanRecord } from "@/lib/offline/DataProvider";
+import { blockDrills } from "@/lib/practice/drills";
 
 export interface PracticeWarning {
   id: string;
@@ -6,7 +7,7 @@ export interface PracticeWarning {
 }
 
 function drillFor(block: PracticeBlockRecord, drills: DrillRecord[]): DrillRecord | undefined {
-  return block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
+  return blockDrills(block, drills)[0];
 }
 
 export function computePracticeWarnings(
@@ -30,8 +31,7 @@ export function computePracticeWarnings(
   if (plannedMinutes > 0) {
     for (const block of blocks) {
       if (block.plannedMinutes / plannedMinutes > 0.4) {
-        const drill = drillFor(block, drills);
-        const label = drill ? drill.name : blockTypeLabel(block.type);
+        const label = block.type === "split" ? splitBlockLabel(block, drills) : drillFor(block, drills)?.name ?? blockTypeLabel(block.type);
         warnings.push({
           id: `block-share:${block.id}`,
           message: `${label} takes up more than 40% of the session (${block.plannedMinutes} of ${plannedMinutes} min).`,
@@ -40,22 +40,22 @@ export function computePracticeWarnings(
     }
   }
 
-  // Drill scheduled below its own minimum minutes.
+  // Drill scheduled below its own minimum minutes (either station, for a split block).
   for (const block of blocks) {
-    const drill = drillFor(block, drills);
-    if (drill?.minMinutes != null && block.plannedMinutes < drill.minMinutes) {
-      warnings.push({
-        id: `below-min:${block.id}`,
-        message: `${drill.name} is scheduled for ${block.plannedMinutes} min, below its ${drill.minMinutes} min minimum.`,
-      });
+    for (const drill of blockDrills(block, drills)) {
+      if (drill.minMinutes != null && block.plannedMinutes < drill.minMinutes) {
+        warnings.push({
+          id: `below-min:${block.id}:${drill.id}`,
+          message: `${drill.name} is scheduled for ${block.plannedMinutes} min, below its ${drill.minMinutes} min minimum.`,
+        });
+      }
     }
   }
 
   // No free play / small-sided game block anywhere in the plan.
   const hasFreePlayOrGame = blocks.some((b) => {
     if (b.type === "free_play") return true;
-    const drill = drillFor(b, drills);
-    return drill?.category === "small_sided_game";
+    return blockDrills(b, drills).some((d) => d.category === "small_sided_game");
   });
   if (!hasFreePlayOrGame && blocks.length > 0) {
     warnings.push({ id: "no-game-or-free-play", message: "No free play or small-sided game block — consider adding one." });
@@ -70,14 +70,20 @@ export function computePracticeWarnings(
     warnings.push({ id: "talk-too-long", message: `Talking totals ${talkMinutes} min — keep instructions brief for this age group.` });
   }
 
-  // Drill's minPlayers exceeding how many players are marked present.
+  // Drill's minPlayers exceeding how many players are available for it — the
+  // full present count normally, but each station of a split block only gets
+  // roughly half the team.
   for (const block of blocks) {
-    const drill = drillFor(block, drills);
-    if (drill?.minPlayers != null && drill.minPlayers > presentPlayerCount) {
-      warnings.push({
-        id: `not-enough-players:${block.id}`,
-        message: `${drill.name} needs at least ${drill.minPlayers} players, but only ${presentPlayerCount} are marked present.`,
-      });
+    const availableForBlock = block.type === "split" ? Math.floor(presentPlayerCount / 2) : presentPlayerCount;
+    for (const drill of blockDrills(block, drills)) {
+      if (drill.minPlayers != null && drill.minPlayers > availableForBlock) {
+        warnings.push({
+          id: `not-enough-players:${block.id}:${drill.id}`,
+          message: `${drill.name} needs at least ${drill.minPlayers} players, but only ${availableForBlock} are available${
+            block.type === "split" ? " in each group" : ""
+          }.`,
+        });
+      }
     }
   }
 
@@ -91,6 +97,12 @@ export function computePracticeWarnings(
 }
 
 function blockTypeLabel(type: string): string {
-  const labels: Record<string, string> = { drill: "Drill", break: "Break", talk: "Talk", free_play: "Free Play" };
+  const labels: Record<string, string> = { drill: "Drill", break: "Break", talk: "Talk", free_play: "Free Play", split: "Split" };
   return labels[type] ?? type;
+}
+
+function splitBlockLabel(block: PracticeBlockRecord, drills: DrillRecord[]): string {
+  const drillA = block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
+  const drillB = block.drillIdB ? drills.find((d) => d.id === block.drillIdB) : undefined;
+  return `${drillA?.name ?? block.stationLabel} / ${drillB?.name ?? block.stationLabelB}`;
 }

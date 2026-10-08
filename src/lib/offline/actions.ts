@@ -176,7 +176,16 @@ export async function updatePracticePlan(mutate: Mutate, id: string, fields: Rec
 
 export async function createPracticeBlock(
   mutate: Mutate,
-  data: { planId: string; order: number; type: "drill" | "break" | "talk" | "free_play"; drillId?: string | null; plannedMinutes: number }
+  data: {
+    planId: string;
+    order: number;
+    type: "drill" | "break" | "talk" | "free_play" | "split";
+    drillId?: string | null;
+    drillIdB?: string | null;
+    stationLabel?: string;
+    stationLabelB?: string;
+    plannedMinutes: number;
+  }
 ): Promise<string> {
   const id = newId();
   await mutate("practiceBlock", id, {
@@ -184,6 +193,9 @@ export async function createPracticeBlock(
     order: data.order,
     type: data.type,
     drillId: data.drillId ?? null,
+    drillIdB: data.drillIdB ?? null,
+    stationLabel: data.stationLabel ?? "Group A",
+    stationLabelB: data.stationLabelB ?? "Group B",
     plannedMinutes: data.plannedMinutes,
     blockNotes: "",
   });
@@ -206,6 +218,9 @@ interface DuplicatableBlock {
   order: number;
   type: string;
   drillId: string | null;
+  drillIdB: string | null;
+  stationLabel: string;
+  stationLabelB: string;
   plannedMinutes: number;
   blockNotes: string;
 }
@@ -231,8 +246,11 @@ export async function duplicatePracticePlan(
     await createPracticeBlock(mutate, {
       planId: id,
       order: block.order,
-      type: block.type as "drill" | "break" | "talk" | "free_play",
+      type: block.type as "drill" | "break" | "talk" | "free_play" | "split",
       drillId: block.drillId,
+      drillIdB: block.drillIdB,
+      stationLabel: block.stationLabel,
+      stationLabelB: block.stationLabelB,
       plannedMinutes: block.plannedMinutes,
     });
   }

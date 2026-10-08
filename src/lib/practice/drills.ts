@@ -1,8 +1,15 @@
-import { DrillRecord } from "@/lib/offline/DataProvider";
+import { DrillRecord, PracticeBlockRecord } from "@/lib/offline/DataProvider";
 
 /** A team's active drill catalog: its own drills, excluding archived ones. */
 export function visibleDrills(drills: DrillRecord[], teamId: string): DrillRecord[] {
   return drills.filter((d) => d.teamId === teamId && !d.archived);
+}
+
+/** Every drill a block references — one for a normal drill block, two (in station order) for a split block. */
+export function blockDrills(block: Pick<PracticeBlockRecord, "drillId" | "drillIdB">, drills: DrillRecord[]): DrillRecord[] {
+  return [block.drillId, block.drillIdB]
+    .map((id) => (id ? drills.find((d) => d.id === id) : undefined))
+    .filter((d): d is DrillRecord => Boolean(d));
 }
 
 export function slugify(name: string): string {

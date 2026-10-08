@@ -181,7 +181,8 @@ model Drill {
   updatedAt       DateTime @updatedAt
   fieldTimestamps Json     @default("{}")
 
-  blocks PracticeBlock[]
+  blocks           PracticeBlock[]
+  blocksAsStationB PracticeBlock[] @relation("PracticeBlockDrillB")
 }
 
 model PracticePlan {
@@ -208,9 +209,13 @@ model PracticeBlock {
   planId         String
   plan           PracticePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   order          Int
-  type           String // drill | break | talk | free_play
-  drillId        String?
+  type           String // drill | break | talk | free_play | split
+  drillId        String? // for "split" blocks, the first station's drill
   drill          Drill?       @relation(fields: [drillId], references: [id])
+  drillIdB       String? // "split" blocks only: the second, simultaneous station's drill
+  drillB         Drill?       @relation("PracticeBlockDrillB", fields: [drillIdB], references: [id])
+  stationLabel   String       @default("Group A")
+  stationLabelB  String       @default("Group B")
   plannedMinutes Int
   blockNotes     String       @default("")
   updatedAt      DateTime     @updatedAt

@@ -119,6 +119,9 @@ export interface PracticeBlockRecord {
   order: number;
   type: string;
   drillId: string | null;
+  drillIdB: string | null;
+  stationLabel: string;
+  stationLabelB: string;
   plannedMinutes: number;
   blockNotes: string;
   updatedAt: string;

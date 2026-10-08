@@ -1,4 +1,5 @@
 import { DrillRecord, PracticeBlockRecord } from "@/lib/offline/DataProvider";
+import { blockDrills } from "@/lib/practice/drills";
 
 export interface AutoBalanceChange {
   blockId: string;
@@ -6,25 +7,30 @@ export interface AutoBalanceChange {
 }
 
 /**
- * Redistributes the gap between planned and target minutes across drill
- * blocks only (break/talk/free_play are left alone - a coach picked those
- * durations deliberately), one minute at a time in round-robin order, never
- * pushing a drill below its minMinutes or above its maxMinutes. Stops early
- * if every eligible block hits its floor/ceiling before the gap closes.
+ * Redistributes the gap between planned and target minutes across drill and
+ * split blocks only (break/talk/free_play are left alone - a coach picked
+ * those durations deliberately), one minute at a time in round-robin order,
+ * never pushing a block below the tightest minMinutes or above the
+ * loosest maxMinutes of the drill(s) it holds. Stops early if every
+ * eligible block hits its floor/ceiling before the gap closes.
  */
 export function computeAutoBalance(blocks: PracticeBlockRecord[], drills: DrillRecord[], targetMinutes: number): AutoBalanceChange[] {
-  const working = blocks.map((b) => ({
-    id: b.id,
-    type: b.type,
-    minutes: b.plannedMinutes,
-    drill: b.drillId ? drills.find((d) => d.id === b.drillId) : undefined,
-  }));
+  const working = blocks.map((b) => {
+    const blockDrillList = blockDrills(b, drills);
+    return {
+      id: b.id,
+      type: b.type,
+      minutes: b.plannedMinutes,
+      min: blockDrillList.length > 0 ? Math.max(...blockDrillList.map((d) => d.minMinutes ?? 1)) : undefined,
+      max: blockDrillList.length > 0 ? Math.min(...blockDrillList.map((d) => d.maxMinutes ?? Infinity)) : undefined,
+    };
+  });
 
   const total = working.reduce((sum, b) => sum + b.minutes, 0);
   const delta = targetMinutes - total;
   if (delta === 0) return [];
 
-  const eligible = working.filter((b) => b.type === "drill" && b.drill);
+  const eligible = working.filter((b) => (b.type === "drill" || b.type === "split") && b.min !== undefined);
   if (eligible.length === 0) return [];
 
   const direction = delta > 0 ? 1 : -1;
@@ -34,10 +40,8 @@ export function computeAutoBalance(blocks: PracticeBlockRecord[], drills: DrillR
     let madeProgress = false;
     for (const b of eligible) {
       if (remaining <= 0) break;
-      const min = b.drill!.minMinutes ?? 1;
-      const max = b.drill!.maxMinutes ?? Infinity;
       const next = b.minutes + direction;
-      if (next < min || next > max) continue;
+      if (next < b.min! || next > b.max!) continue;
       b.minutes = next;
       remaining -= 1;
       madeProgress = true;

@@ -1,14 +1,21 @@
 import { DrillRecord, PracticeBlockRecord, PracticePlanRecord } from "@/lib/offline/DataProvider";
 import { focusAreaLabel, FOCUS_AREAS } from "@/lib/practice/constants";
+import { blockDrills } from "@/lib/practice/drills";
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
   drill: "Drill",
   break: "Break",
   talk: "Talk",
   free_play: "Free Play",
+  split: "Split",
 };
 
 export function blockLabel(block: PracticeBlockRecord, drills: DrillRecord[]): string {
+  if (block.type === "split") {
+    const drillA = block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
+    const drillB = block.drillIdB ? drills.find((d) => d.id === block.drillIdB) : undefined;
+    return `${block.stationLabel}: ${drillA?.name ?? "?"}  /  ${block.stationLabelB}: ${drillB?.name ?? "?"}`;
+  }
   if (block.drillId) {
     const drill = drills.find((d) => d.id === block.drillId);
     if (drill) return drill.name;
@@ -19,10 +26,9 @@ export function blockLabel(block: PracticeBlockRecord, drills: DrillRecord[]): s
 export function equipmentChecklist(blocks: PracticeBlockRecord[], drills: DrillRecord[]): string[] {
   const items = new Set<string>();
   for (const block of blocks) {
-    if (!block.drillId) continue;
-    const drill = drills.find((d) => d.id === block.drillId);
-    if (!drill) continue;
-    for (const item of drill.equipment) items.add(item);
+    for (const drill of blockDrills(block, drills)) {
+      for (const item of drill.equipment) items.add(item);
+    }
   }
   return [...items].sort((a, b) => a.localeCompare(b));
 }
@@ -44,13 +50,15 @@ export function textSummaryFromPracticePlan(
   let offset = 0;
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   for (const block of sorted) {
-    const drill = block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
     lines.push(`[${offset} min] ${blockLabel(block, drills)} — ${block.plannedMinutes} min`);
-    if (drill) {
-      if (drill.setup) lines.push(`  Setup: ${drill.setup}`);
-      if (drill.instructions) lines.push(`  Instructions: ${drill.instructions}`);
-      if (drill.coachingPoints.length > 0) lines.push(`  Coaching points: ${drill.coachingPoints.join("; ")}`);
-    }
+    const stationLabels = [block.stationLabel, block.stationLabelB];
+    blockDrills(block, drills).forEach((drill, i) => {
+      if (block.type === "split") lines.push(`  ${stationLabels[i]}:`);
+      const indent = block.type === "split" ? "    " : "  ";
+      if (drill.setup) lines.push(`${indent}Setup: ${drill.setup}`);
+      if (drill.instructions) lines.push(`${indent}Instructions: ${drill.instructions}`);
+      if (drill.coachingPoints.length > 0) lines.push(`${indent}Coaching points: ${drill.coachingPoints.join("; ")}`);
+    });
     offset += block.plannedMinutes;
   }
 
@@ -80,11 +88,10 @@ export function computeFocusAreaCoverage(
   for (const plan of plans) {
     const blocks = blocksByPlan.get(plan.id) ?? [];
     for (const block of blocks) {
-      if (!block.drillId) continue;
-      const drill = drills.find((d) => d.id === block.drillId);
-      if (!drill) continue;
-      for (const area of drill.focusAreas) {
-        minutesByArea.set(area, (minutesByArea.get(area) ?? 0) + block.plannedMinutes);
+      for (const drill of blockDrills(block, drills)) {
+        for (const area of drill.focusAreas) {
+          minutesByArea.set(area, (minutesByArea.get(area) ?? 0) + block.plannedMinutes);
+        }
       }
     }
   }

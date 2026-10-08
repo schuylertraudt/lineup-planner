@@ -15,7 +15,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Drill not found" }, { status: 404 });
     }
 
-    const referencedCount = await prisma.practiceBlock.count({ where: { drillId: params.id } });
+    const referencedCount = await prisma.practiceBlock.count({
+      where: { OR: [{ drillId: params.id }, { drillIdB: params.id }] },
+    });
     if (referencedCount > 0) {
       return NextResponse.json(
         { error: "This drill is used in one or more practice plans and can't be permanently deleted. Archive it instead." },

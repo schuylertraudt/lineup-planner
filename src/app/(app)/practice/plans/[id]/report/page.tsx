@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/lib/offline/DataProvider";
 import { blockLabel, equipmentChecklist, textSummaryFromPracticePlan } from "@/lib/practice/report";
+import { blockDrills } from "@/lib/practice/drills";
 import { categoryLabel } from "@/lib/practice/constants";
 
 export default function PracticePlanReportPage({ params }: { params: { id: string } }) {
@@ -74,20 +75,21 @@ export default function PracticePlanReportPage({ params }: { params: { id: strin
             {blocks.map((block) => {
               const startOffset = offset;
               offset += block.plannedMinutes;
-              const drill = block.drillId ? drills.find((d) => d.id === block.drillId) : undefined;
+              const stationLabels = [block.stationLabel, block.stationLabelB];
               return (
                 <tr key={block.id} className="border-b border-slate-100 align-top">
                   <td className="px-3 py-2 whitespace-nowrap font-semibold">{startOffset} min</td>
                   <td className="px-3 py-2">
                     <p className="font-semibold">{blockLabel(block, drills)}</p>
-                    {drill && (
-                      <div className="text-xs text-slate-600 space-y-0.5 mt-0.5">
+                    {blockDrills(block, drills).map((drill, i) => (
+                      <div key={drill.id} className="text-xs text-slate-600 space-y-0.5 mt-0.5">
+                        {block.type === "split" && <p className="font-semibold text-slate-700">{stationLabels[i]}</p>}
                         <p>{categoryLabel(drill.category)}</p>
                         {drill.setup && <p>Setup: {drill.setup}</p>}
                         {drill.instructions && <p>{drill.instructions}</p>}
                         {drill.coachingPoints.length > 0 && <p>Coaching points: {drill.coachingPoints.join("; ")}</p>}
                       </div>
-                    )}
+                    ))}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{block.plannedMinutes}</td>
                 </tr>

@@ -18,7 +18,10 @@ export default function DrillDetailPage({ params }: { params: { id: string } }) 
   const [formValue, setFormValue] = useState<DrillFormValue | null>(null);
 
   const myRole = coaches.find((c) => c.id === coachId)?.role;
-  const referencedCount = useMemo(() => practiceBlocks.filter((b) => b.drillId === params.id).length, [practiceBlocks, params.id]);
+  const referencedCount = useMemo(
+    () => practiceBlocks.filter((b) => b.drillId === params.id || b.drillIdB === params.id).length,
+    [practiceBlocks, params.id]
+  );
 
   if (!ready) return <p className="p-6 text-slate-500">Loading...</p>;
   if (!drill) {
