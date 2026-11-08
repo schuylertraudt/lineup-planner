@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useData } from "@/lib/offline/DataProvider";
-import { updateTeamSettings } from "@/lib/offline/actions";
+import { updateTeamSettings, updateSeason } from "@/lib/offline/actions";
 import { PositionGroup } from "@/lib/types";
 
 interface Coach {
@@ -13,11 +14,11 @@ interface Coach {
 }
 
 export default function SettingsPage() {
-  const { team, slots, mutate, coachId, refresh } = useData();
+  const { team, seasons, currentSeasonId, slots, mutate, coachId, refresh } = useData();
+  const currentSeason = seasons.find((s) => s.id === currentSeasonId);
   const [myRole, setMyRole] = useState<string>("coach");
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [name, setName] = useState("");
-  const [seasonLabel, setSeasonLabel] = useState("");
   const [defaultPeriodCount, setDefaultPeriodCount] = useState(4);
   const [targetMinutes, setTargetMinutes] = useState(30);
   const [slotDraft, setSlotDraft] = useState<{ name: string; group: PositionGroup }[]>([]);
@@ -38,13 +39,15 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (team) {
-      setName(team.name);
-      setSeasonLabel(team.seasonLabel);
       setDefaultPeriodCount(team.defaultPeriodCount);
       setTargetMinutes(team.targetMinutes);
       setJoinCode(team.joinCode);
     }
   }, [team]);
+
+  useEffect(() => {
+    if (currentSeason) setName(currentSeason.name);
+  }, [currentSeason]);
 
   useEffect(() => {
     setSlotDraft([...slots].sort((a, b) => a.order - b.order).map((s) => ({ name: s.name, group: s.group })));
@@ -53,8 +56,9 @@ export default function SettingsPage() {
   const isOwner = myRole === "owner";
 
   async function saveTeamInfo() {
-    if (!team) return;
-    await updateTeamSettings(mutate, team.id, { name, seasonLabel, defaultPeriodCount, targetMinutes });
+    if (!team || !currentSeasonId) return;
+    await updateSeason(mutate, currentSeasonId, { name });
+    await updateTeamSettings(mutate, team.id, { defaultPeriodCount, targetMinutes });
     setMsg("Saved.");
     setTimeout(() => setMsg(""), 1500);
   }
@@ -63,7 +67,7 @@ export default function SettingsPage() {
     const res = await fetch("/api/team/slots", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slots: slotDraft, playersOnField: slotDraft.length }),
+      body: JSON.stringify({ slots: slotDraft }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -131,14 +135,14 @@ export default function SettingsPage() {
       {msg && <p className="text-emerald-700 font-semibold text-sm">{msg}</p>}
 
       <div className="card p-4 space-y-3">
-        <p className="font-semibold">Team info</p>
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">Team info</p>
+          <Link href="/settings/seasons" className="text-xs font-semibold text-field underline">Manage seasons</Link>
+        </div>
         <div>
           <label className="label">Team name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} disabled={!isOwner} />
-        </div>
-        <div>
-          <label className="label">Season label</label>
-          <input className="input" value={seasonLabel} onChange={(e) => setSeasonLabel(e.target.value)} disabled={!isOwner} />
+          <p className="text-xs text-slate-500 mt-1">This season's name - shown at the top of every screen.</p>
         </div>
         <div>
           <label className="label">Default period count</label>

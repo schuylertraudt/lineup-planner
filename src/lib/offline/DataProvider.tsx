@@ -10,21 +10,29 @@ export interface TeamRecord {
   id: string;
   name: string;
   joinCode: string;
-  seasonLabel: string;
-  playersOnField: number;
+  currentSeasonId: string | null;
   defaultPeriodCount: number;
   targetMinutes: number;
 }
-export interface SlotRecord {
+export interface SeasonRecord {
   id: string;
   teamId: string;
+  name: string;
+  playersOnField: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SlotRecord {
+  id: string;
+  seasonId: string;
   order: number;
   name: string;
   group: "GK" | "D" | "M" | "F";
 }
 export interface PlayerRecord {
   id: string;
-  teamId: string;
+  seasonId: string;
   firstName: string;
   lastNameInitial: string;
   jerseyNumber: string;
@@ -34,7 +42,7 @@ export interface PlayerRecord {
 }
 export interface GameRecord {
   id: string;
-  teamId: string;
+  seasonId: string;
   date: string;
   opponent: string;
   location: string;
@@ -136,6 +144,7 @@ export interface PracticeAttendanceRecord {
 
 interface DataState {
   team: TeamRecord | null;
+  seasons: SeasonRecord[];
   slots: SlotRecord[];
   players: PlayerRecord[];
   games: GameRecord[];
@@ -151,6 +160,7 @@ interface DataState {
 
 const EMPTY_STATE: DataState = {
   team: null,
+  seasons: [],
   slots: [],
   players: [],
   games: [],
@@ -177,6 +187,12 @@ interface DataContextValue extends DataState {
   syncStatus: SyncStatus;
   pendingCount: number;
   coachId: string;
+  /** The team's current season id (null only before first sync completes). Players/slots/games/assignments/availabilities/gamePeriods above are already filtered to it. */
+  currentSeasonId: string | null;
+  /** Unfiltered, every season's own players/slots/games - for season-management UI only (e.g. "Fall 2026: 11 players, 8 games"). Everyday pages should keep using the filtered fields above. */
+  allPlayers: PlayerRecord[];
+  allSlots: SlotRecord[];
+  allGames: GameRecord[];
   mutate: (
     entity: SyncEntity,
     entityId: string,
@@ -190,6 +206,8 @@ interface DataContextValue extends DataState {
   deleteDrillPermanently: (drillId: string) => Promise<{ ok: boolean; error?: string }>;
   /** Deletes a practice plan (and its blocks/attendance) on the server and purges it locally. Requires connectivity. */
   deletePracticePlan: (planId: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Creates a new season (blank roster, default position template) and switches to it. Owner-only, requires connectivity. */
+  createSeason: (name: string) => Promise<{ ok: boolean; error?: string; seasonId?: string }>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -201,6 +219,7 @@ const STORE_BY_ENTITY: Record<SyncEntity, string> = {
   assignment: "assignments",
   gamePeriod: "gamePeriods",
   team: "team",
+  season: "seasons",
   drill: "drills",
   practicePlan: "practicePlans",
   practiceBlock: "practiceBlocks",
@@ -221,6 +240,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
   const loadFromIndexedDb = useCallback(async () => {
     const [
       team,
+      seasons,
       slots,
       players,
       games,
@@ -234,6 +254,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       practiceAttendances,
     ] = await Promise.all([
       getAll<TeamRecord>("team"),
+      getAll<SeasonRecord>("seasons"),
       getAll<SlotRecord>("slots"),
       getAll<PlayerRecord>("players"),
       getAll<GameRecord>("games"),
@@ -248,6 +269,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     ]);
     setState({
       team: team[0] ?? null,
+      seasons,
       slots: slots.sort((a, b) => a.order - b.order),
       players: players.sort((a, b) => a.order - b.order),
       games,
@@ -324,6 +346,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     const outbox = await getOutbox();
     const pendingIds = new Set(outbox.map((o) => o.entityId));
 
+    const seasons = (result.seasons as SeasonRecord[]).filter((s) => !pendingIds.has(s.id));
     const players = (result.players as PlayerRecord[]).filter((p) => !pendingIds.has(p.id));
     const games = (result.games as GameRecord[]).filter((g) => !pendingIds.has(g.id));
     const availabilities = (result.availabilities as AvailabilityRecord[]).filter((a) => !pendingIds.has(a.id));
@@ -337,6 +360,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     );
 
     await Promise.all([
+      putAll("seasons", seasons),
       putAll("players", players),
       putAll("games", games),
       putAll("availabilities", availabilities),
@@ -359,6 +383,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
       let next = { ...prev };
       if (result.team) next.team = result.team as TeamRecord;
       next.slots = (result.slots as SlotRecord[]).sort((a, b) => a.order - b.order);
+      for (const s of seasons) next.seasons = upsertList(next.seasons, s);
       for (const p of players) next.players = upsertList(next.players, p);
       for (const g of games) next.games = upsertList(next.games, g);
       for (const a of availabilities) next.availabilities = upsertList(next.availabilities, a);
@@ -510,6 +535,56 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     return { ok: true };
   }, []);
 
+  const createSeason = useCallback(async (name: string): Promise<{ ok: boolean; error?: string; seasonId?: string }> => {
+    try {
+      const res = await fetch("/api/team/seasons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { ok: false, error: data.error ?? "Could not create season." };
+      }
+      await refresh();
+      return { ok: true, seasonId: data.seasonId };
+    } catch {
+      return { ok: false, error: "Creating a season requires an internet connection. Try again once you're online." };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const currentSeasonId = state.team?.currentSeasonId ?? null;
+  const currentSeasonGameIds = React.useMemo(
+    () => new Set(state.games.filter((g) => g.seasonId === currentSeasonId).map((g) => g.id)),
+    [state.games, currentSeasonId]
+  );
+  const filteredPlayers = React.useMemo(
+    () => state.players.filter((p) => p.seasonId === currentSeasonId),
+    [state.players, currentSeasonId]
+  );
+  const filteredSlots = React.useMemo(
+    () => state.slots.filter((s) => s.seasonId === currentSeasonId),
+    [state.slots, currentSeasonId]
+  );
+  const filteredGames = React.useMemo(
+    () => state.games.filter((g) => g.seasonId === currentSeasonId),
+    [state.games, currentSeasonId]
+  );
+  const filteredAvailabilities = React.useMemo(
+    () => state.availabilities.filter((a) => currentSeasonGameIds.has(a.gameId)),
+    [state.availabilities, currentSeasonGameIds]
+  );
+  const filteredAssignments = React.useMemo(
+    () => state.assignments.filter((a) => currentSeasonGameIds.has(a.gameId)),
+    [state.assignments, currentSeasonGameIds]
+  );
+  const filteredGamePeriods = React.useMemo(
+    () => state.gamePeriods.filter((g) => currentSeasonGameIds.has(g.gameId)),
+    [state.gamePeriods, currentSeasonGameIds]
+  );
+
   useEffect(() => {
     (async () => {
       await loadFromIndexedDb();
@@ -547,6 +622,16 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
     <DataContext.Provider
       value={{
         ...state,
+        players: filteredPlayers,
+        slots: filteredSlots,
+        games: filteredGames,
+        availabilities: filteredAvailabilities,
+        assignments: filteredAssignments,
+        gamePeriods: filteredGamePeriods,
+        allPlayers: state.players,
+        allSlots: state.slots,
+        allGames: state.games,
+        currentSeasonId,
         ready,
         syncStatus,
         pendingCount,
@@ -556,6 +641,7 @@ export function DataProvider({ coachId, children }: { coachId: string; children:
         deleteGame,
         deleteDrillPermanently,
         deletePracticePlan,
+        createSeason,
       }}
     >
       {children}

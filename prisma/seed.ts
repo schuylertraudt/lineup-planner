@@ -37,21 +37,28 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash("coachdemo123", 10);
+  const seasonId = randomUUID();
 
   const team = await prisma.team.create({
     data: {
       name: "Demo Sharks U8",
       joinCode: "DEMO1234",
-      seasonLabel: "Fall Demo Season",
-      playersOnField: 8,
       defaultPeriodCount: 4,
-      slots: { create: DEFAULT_SLOTS.map((s, i) => ({ order: i, name: s.name, group: s.group })) },
+      seasons: {
+        create: {
+          id: seasonId,
+          name: "Fall Demo Season",
+          playersOnField: 8,
+          slots: { create: DEFAULT_SLOTS.map((s, i) => ({ order: i, name: s.name, group: s.group })) },
+        },
+      },
       coaches: {
         create: { email: "coach@example.com", passwordHash, name: "Coach Sam", role: "owner" },
       },
     },
-    include: { slots: { orderBy: { order: "asc" } } },
+    include: { seasons: { include: { slots: { orderBy: { order: "asc" } } } } },
   });
+  await prisma.team.update({ where: { id: team.id }, data: { currentSeasonId: seasonId } });
 
   // Give the demo team its own editable/deletable copy of every starter
   // drill, the same way every real team is seeded at signup - keyed by the
@@ -90,12 +97,12 @@ async function main() {
   for (let i = 0; i < PLAYER_NAMES.length; i++) {
     const [firstName, lastNameInitial, jerseyNumber] = PLAYER_NAMES[i];
     const player = await prisma.player.create({
-      data: { id: randomUUID(), teamId: team.id, firstName, lastNameInitial, jerseyNumber, order: i },
+      data: { id: randomUUID(), seasonId, firstName, lastNameInitial, jerseyNumber, order: i },
     });
     players.push(player);
   }
 
-  const slots = team.slots;
+  const slots = team.seasons[0].slots;
 
   // Game 1: final, with a completed, fairly-distributed actual record.
   const game1Id = randomUUID();
@@ -104,7 +111,7 @@ async function main() {
   await prisma.game.create({
     data: {
       id: game1Id,
-      teamId: team.id,
+      seasonId,
       date: game1Date,
       opponent: "Riverside FC",
       location: "Field 3",
@@ -169,7 +176,7 @@ async function main() {
   await prisma.game.create({
     data: {
       id: game2Id,
-      teamId: team.id,
+      seasonId,
       date: game2Date,
       opponent: "Lakeside United",
       location: "Field 1",

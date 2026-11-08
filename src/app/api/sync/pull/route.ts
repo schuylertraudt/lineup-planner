@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
     const [
       team,
+      seasons,
       slots,
       players,
       games,
@@ -23,17 +24,18 @@ export async function GET(req: NextRequest) {
       practiceAttendances,
     ] = await Promise.all([
       prisma.team.findUnique({ where: { id: coach.teamId } }),
-      prisma.positionSlot.findMany({ where: { teamId: coach.teamId }, orderBy: { order: "asc" } }),
-      prisma.player.findMany({ where: { teamId: coach.teamId, updatedAt: { gt: sinceDate } } }),
-      prisma.game.findMany({ where: { teamId: coach.teamId, updatedAt: { gt: sinceDate } } }),
+      prisma.season.findMany({ where: { teamId: coach.teamId }, orderBy: { createdAt: "asc" } }),
+      prisma.positionSlot.findMany({ where: { season: { teamId: coach.teamId } }, orderBy: { order: "asc" } }),
+      prisma.player.findMany({ where: { season: { teamId: coach.teamId }, updatedAt: { gt: sinceDate } } }),
+      prisma.game.findMany({ where: { season: { teamId: coach.teamId }, updatedAt: { gt: sinceDate } } }),
       prisma.availability.findMany({
-        where: { updatedAt: { gt: sinceDate }, game: { teamId: coach.teamId } },
+        where: { updatedAt: { gt: sinceDate }, game: { season: { teamId: coach.teamId } } },
       }),
       prisma.assignment.findMany({
-        where: { updatedAt: { gt: sinceDate }, game: { teamId: coach.teamId } },
+        where: { updatedAt: { gt: sinceDate }, game: { season: { teamId: coach.teamId } } },
       }),
       prisma.gamePeriod.findMany({
-        where: { updatedAt: { gt: sinceDate }, game: { teamId: coach.teamId } },
+        where: { updatedAt: { gt: sinceDate }, game: { season: { teamId: coach.teamId } } },
       }),
       prisma.coach.findMany({
         where: { teamId: coach.teamId },
@@ -52,6 +54,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       serverTime: new Date().toISOString(),
       team,
+      seasons,
       slots,
       players,
       games,

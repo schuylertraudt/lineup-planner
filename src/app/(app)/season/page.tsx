@@ -12,7 +12,7 @@ function todayIso() {
 }
 
 export default function SeasonPage() {
-  const { games, team, ready, mutate } = useData();
+  const { games, team, seasons, currentSeasonId, ready, mutate } = useData();
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [opponent, setOpponent] = useState("");
@@ -20,10 +20,12 @@ export default function SeasonPage() {
   const [periodCount, setPeriodCount] = useState(team?.defaultPeriodCount ?? 4);
 
   const sorted = useMemo(() => [...games].sort((a, b) => a.date.localeCompare(b.date)), [games]);
+  const currentSeason = seasons.find((s) => s.id === currentSeasonId);
 
   async function addGame() {
-    if (!opponent.trim()) return;
+    if (!opponent.trim() || !currentSeasonId) return;
     const id = await createGame(mutate, {
+      seasonId: currentSeasonId,
       date: new Date(date).toISOString(),
       opponent: opponent.trim(),
       location,
@@ -40,8 +42,11 @@ export default function SeasonPage() {
   return (
     <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Season{team?.seasonLabel ? ` · ${team.seasonLabel}` : ""}</h1>
+        <h1 className="text-xl font-bold">{currentSeason?.name ?? "Season"}</h1>
         <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>+ Game</button>
+      </div>
+      <div className="flex justify-end -mt-3">
+        <Link href="/settings/seasons" className="text-xs font-semibold text-field underline">Manage seasons</Link>
       </div>
 
       {showForm && (

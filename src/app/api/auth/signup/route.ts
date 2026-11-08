@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { createSession, generateJoinCode, hashPassword } from "@/lib/auth";
 import { seedTeamDrillsFromLibrary } from "@/lib/practice/seedTeamDrills";
-
-const DEFAULT_SLOTS = [
-  { name: "GK", group: "GK" },
-  { name: "D", group: "D" },
-  { name: "D", group: "D" },
-  { name: "D", group: "D" },
-  { name: "M", group: "M" },
-  { name: "M", group: "M" },
-  { name: "M", group: "M" },
-  { name: "F", group: "F" },
-];
+import { DEFAULT_SLOTS } from "@/lib/defaultSlots";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -38,14 +29,21 @@ export async function POST(req: NextRequest) {
   }
 
   const passwordHash = await hashPassword(password);
+  const seasonId = randomUUID();
 
   const team = await prisma.team.create({
     data: {
       name: teamName,
       joinCode,
-      seasonLabel: seasonLabel ?? "",
-      slots: {
-        create: DEFAULT_SLOTS.map((s, i) => ({ order: i, name: s.name, group: s.group })),
+      seasons: {
+        create: {
+          id: seasonId,
+          name: seasonLabel?.trim() || teamName,
+          playersOnField: DEFAULT_SLOTS.length,
+          slots: {
+            create: DEFAULT_SLOTS.map((s, i) => ({ order: i, name: s.name, group: s.group })),
+          },
+        },
       },
       coaches: {
         create: {
@@ -58,6 +56,7 @@ export async function POST(req: NextRequest) {
     },
     include: { coaches: true },
   });
+  await prisma.team.update({ where: { id: team.id }, data: { currentSeasonId: seasonId } });
 
   const coach = team.coaches[0];
   await seedTeamDrillsFromLibrary(team.id);

@@ -14,10 +14,11 @@ export function newId(): string {
 
 export async function createPlayer(
   mutate: Mutate,
-  data: { firstName: string; lastNameInitial?: string; jerseyNumber?: string; order: number }
+  data: { seasonId: string; firstName: string; lastNameInitial?: string; jerseyNumber?: string; order: number }
 ): Promise<string> {
   const id = newId();
   await mutate("player", id, {
+    seasonId: data.seasonId,
     firstName: data.firstName,
     lastNameInitial: data.lastNameInitial ?? "",
     jerseyNumber: data.jerseyNumber ?? "",
@@ -37,10 +38,11 @@ export async function setPlayerActive(mutate: Mutate, id: string, active: boolea
 
 export async function createGame(
   mutate: Mutate,
-  data: { date: string; opponent: string; location?: string; periodCount: number }
+  data: { seasonId: string; date: string; opponent: string; location?: string; periodCount: number }
 ): Promise<string> {
   const id = newId();
   await mutate("game", id, {
+    seasonId: data.seasonId,
     date: data.date,
     opponent: data.opponent,
     location: data.location ?? "",
@@ -90,6 +92,15 @@ export async function setGamePeriodStatus(
 
 export async function updateTeamSettings(mutate: Mutate, teamId: string, fields: Record<string, unknown>) {
   await mutate("team", teamId, fields);
+}
+
+/** Switches the team's current season - changes what every coach sees app-wide (roster, position slots, games, fairness totals). */
+export async function switchSeason(mutate: Mutate, teamId: string, seasonId: string) {
+  await mutate("team", teamId, { currentSeasonId: seasonId });
+}
+
+export async function updateSeason(mutate: Mutate, seasonId: string, fields: Record<string, unknown>) {
+  await mutate("season", seasonId, fields);
 }
 
 export interface DrillInput {

@@ -3,12 +3,13 @@ import { Mutation } from "./types";
 import { mergeFieldsLWW } from "./merge";
 
 const ALLOWED_FIELDS: Record<Mutation["entity"], string[]> = {
-  player: ["firstName", "lastNameInitial", "jerseyNumber", "active", "order"],
-  game: ["date", "opponent", "location", "periodCount", "status", "notes"],
+  player: ["firstName", "lastNameInitial", "jerseyNumber", "active", "order", "seasonId"],
+  game: ["date", "opponent", "location", "periodCount", "status", "notes", "seasonId"],
   availability: ["status", "gameId", "playerId"],
   assignment: ["playerId", "gameId", "periodNumber", "slotIndex", "isActual", "updatedByCoachId"],
   gamePeriod: ["status", "startedAt", "completedAt", "gameId", "periodNumber"],
-  team: ["name", "seasonLabel", "playersOnField", "defaultPeriodCount", "targetMinutes"],
+  team: ["name", "currentSeasonId", "defaultPeriodCount", "targetMinutes"],
+  season: ["name", "playersOnField", "archived"],
   drill: [
     "name",
     "slug",
@@ -70,6 +71,8 @@ export async function applyMutation(mutation: Mutation, teamId: string, coachId:
       return applyGamePeriod(mutation, fields, teamId);
     case "team":
       return applyTeam(mutation, fields, teamId);
+    case "season":
+      return applySeason(mutation, fields, teamId);
     case "drill":
       return applyDrill(mutation, fields, teamId, coachId);
     case "practicePlan":
@@ -84,14 +87,18 @@ export async function applyMutation(mutation: Mutation, teamId: string, coachId:
 }
 
 async function applyPlayer(m: Mutation, fields: Record<string, unknown>, teamId: string) {
-  const existing = await prisma.player.findUnique({ where: { id: m.entityId } });
-  if (existing && existing.teamId !== teamId) throw new SyncAuthError("player not in team");
+  const existing = await prisma.player.findUnique({ where: { id: m.entityId }, include: { season: true } });
+  if (existing && existing.season.teamId !== teamId) throw new SyncAuthError("player not in team");
 
   if (!existing) {
+    const seasonId = fields.seasonId as string;
+    const season = await prisma.season.findUnique({ where: { id: seasonId } });
+    if (!season || season.teamId !== teamId) throw new SyncAuthError("season not in team");
+
     const created = await prisma.player.create({
       data: {
         id: m.entityId,
-        teamId,
+        seasonId,
         firstName: (fields.firstName as string) ?? "",
         lastNameInitial: (fields.lastNameInitial as string) ?? "",
         jerseyNumber: (fields.jerseyNumber as string) ?? "",
@@ -124,14 +131,18 @@ async function applyPlayer(m: Mutation, fields: Record<string, unknown>, teamId:
 }
 
 async function applyGame(m: Mutation, fields: Record<string, unknown>, teamId: string) {
-  const existing = await prisma.game.findUnique({ where: { id: m.entityId } });
-  if (existing && existing.teamId !== teamId) throw new SyncAuthError("game not in team");
+  const existing = await prisma.game.findUnique({ where: { id: m.entityId }, include: { season: true } });
+  if (existing && existing.season.teamId !== teamId) throw new SyncAuthError("game not in team");
 
   if (!existing) {
+    const seasonId = fields.seasonId as string;
+    const season = await prisma.season.findUnique({ where: { id: seasonId } });
+    if (!season || season.teamId !== teamId) throw new SyncAuthError("season not in team");
+
     const created = await prisma.game.create({
       data: {
         id: m.entityId,
-        teamId,
+        seasonId,
         date: new Date((fields.date as string) ?? Date.now()),
         opponent: (fields.opponent as string) ?? "",
         location: (fields.location as string) ?? "",
@@ -169,8 +180,8 @@ async function applyGame(m: Mutation, fields: Record<string, unknown>, teamId: s
 async function applyAvailability(m: Mutation, fields: Record<string, unknown>, teamId: string) {
   const gameId = fields.gameId as string;
   const playerId = fields.playerId as string;
-  const game = await prisma.game.findUnique({ where: { id: gameId } });
-  if (!game || game.teamId !== teamId) throw new SyncAuthError("game not in team");
+  const game = await prisma.game.findUnique({ where: { id: gameId }, include: { season: true } });
+  if (!game || game.season.teamId !== teamId) throw new SyncAuthError("game not in team");
 
   const existing = await prisma.availability.findUnique({ where: { id: m.entityId } });
   if (existing && new Date(m.updatedAt) <= existing.updatedAt) return existing;
@@ -193,8 +204,8 @@ async function applyAvailability(m: Mutation, fields: Record<string, unknown>, t
 
 async function applyAssignment(m: Mutation, fields: Record<string, unknown>, teamId: string, coachId: string) {
   const gameId = fields.gameId as string;
-  const game = await prisma.game.findUnique({ where: { id: gameId } });
-  if (!game || game.teamId !== teamId) throw new SyncAuthError("game not in team");
+  const game = await prisma.game.findUnique({ where: { id: gameId }, include: { season: true } });
+  if (!game || game.season.teamId !== teamId) throw new SyncAuthError("game not in team");
 
   const existing = await prisma.assignment.findUnique({ where: { id: m.entityId } });
   if (existing && new Date(m.updatedAt) <= existing.updatedAt) return existing;
@@ -221,8 +232,8 @@ async function applyAssignment(m: Mutation, fields: Record<string, unknown>, tea
 
 async function applyGamePeriod(m: Mutation, fields: Record<string, unknown>, teamId: string) {
   const gameId = fields.gameId as string;
-  const game = await prisma.game.findUnique({ where: { id: gameId } });
-  if (!game || game.teamId !== teamId) throw new SyncAuthError("game not in team");
+  const game = await prisma.game.findUnique({ where: { id: gameId }, include: { season: true } });
+  if (!game || game.season.teamId !== teamId) throw new SyncAuthError("game not in team");
 
   const existing = await prisma.gamePeriod.findUnique({ where: { id: m.entityId } });
   if (existing && new Date(m.updatedAt) <= existing.updatedAt) return existing;
@@ -252,15 +263,51 @@ async function applyTeam(m: Mutation, fields: Record<string, unknown>, teamId: s
   const existing = await prisma.team.findUnique({ where: { id: teamId } });
   if (!existing) throw new Error("team not found");
 
+  let currentSeasonId = existing.currentSeasonId;
+  if (fields.currentSeasonId !== undefined) {
+    const season = await prisma.season.findUnique({ where: { id: fields.currentSeasonId as string } });
+    if (!season || season.teamId !== teamId) throw new SyncAuthError("season not in team");
+    currentSeasonId = season.id;
+  }
+
   // Team has no fieldTimestamps column; use plain updatedAt LWW (settings edits are rare/owner-only).
   return prisma.team.update({
     where: { id: teamId },
     data: {
       name: (fields.name as string) ?? existing.name,
-      seasonLabel: (fields.seasonLabel as string) ?? existing.seasonLabel,
-      playersOnField: (fields.playersOnField as number) ?? existing.playersOnField,
+      currentSeasonId,
       defaultPeriodCount: (fields.defaultPeriodCount as number) ?? existing.defaultPeriodCount,
       targetMinutes: (fields.targetMinutes as number) ?? existing.targetMinutes,
+    },
+  });
+}
+
+async function applySeason(m: Mutation, fields: Record<string, unknown>, teamId: string) {
+  const existing = await prisma.season.findUnique({ where: { id: m.entityId } });
+  if (existing && existing.teamId !== teamId) throw new SyncAuthError("season not in team");
+
+  if (!existing) {
+    return prisma.season.create({
+      data: {
+        id: m.entityId,
+        teamId,
+        name: (fields.name as string) ?? "New Season",
+        playersOnField: (fields.playersOnField as number) ?? 8,
+        archived: (fields.archived as boolean) ?? false,
+        updatedAt: new Date(m.updatedAt),
+      },
+    });
+  }
+
+  // Season has no fieldTimestamps column; use plain updatedAt LWW (season edits are rare/owner-only).
+  if (new Date(m.updatedAt) <= existing.updatedAt) return existing;
+  return prisma.season.update({
+    where: { id: m.entityId },
+    data: {
+      name: (fields.name as string) ?? existing.name,
+      playersOnField: (fields.playersOnField as number) ?? existing.playersOnField,
+      archived: (fields.archived as boolean) ?? existing.archived,
+      updatedAt: new Date(m.updatedAt),
     },
   });
 }

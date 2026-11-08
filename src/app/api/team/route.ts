@@ -7,7 +7,7 @@ export async function GET() {
     const coach = await requireTeamCoach();
     const team = await prisma.team.findUnique({
       where: { id: coach.teamId },
-      include: { slots: { orderBy: { order: "asc" } } },
+      include: { seasons: { include: { slots: { orderBy: { order: "asc" } } } } },
     });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
     return NextResponse.json({ team });

@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from "idb";
 
 export const DB_NAME = "lineup-planner";
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export interface OutboxItem {
   id: string;
@@ -24,6 +24,7 @@ export function getDb(): Promise<IDBPDatabase> {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("team")) db.createObjectStore("team", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("seasons")) db.createObjectStore("seasons", { keyPath: "id" });
         if (!db.objectStoreNames.contains("slots")) db.createObjectStore("slots", { keyPath: "id" });
         if (!db.objectStoreNames.contains("players")) db.createObjectStore("players", { keyPath: "id" });
         if (!db.objectStoreNames.contains("games")) db.createObjectStore("games", { keyPath: "id" });

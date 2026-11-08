@@ -86,10 +86,14 @@ export async function requireCoach(): Promise<CurrentCoach> {
   return coach;
 }
 
-export async function requireTeamCoach(): Promise<CurrentCoach & { teamId: string }> {
+export async function requireTeamCoach(): Promise<CurrentCoach & { teamId: string; currentSeasonId: string }> {
   const coach = await requireCoach();
   if (!coach.teamId) {
     throw new Error("NO_TEAM");
   }
-  return coach as CurrentCoach & { teamId: string };
+  const team = await prisma.team.findUnique({ where: { id: coach.teamId }, select: { currentSeasonId: true } });
+  if (!team?.currentSeasonId) {
+    throw new Error("NO_SEASON");
+  }
+  return { ...coach, currentSeasonId: team.currentSeasonId } as CurrentCoach & { teamId: string; currentSeasonId: string };
 }

@@ -8,12 +8,9 @@ export async function PUT(req: NextRequest) {
     if (coach.role !== "owner") {
       return NextResponse.json({ error: "Only the owner can edit the position template" }, { status: 403 });
     }
-    const { slots, playersOnField } = await req.json();
+    const { slots } = await req.json();
     if (!Array.isArray(slots) || slots.length === 0) {
       return NextResponse.json({ error: "At least one slot is required" }, { status: 400 });
-    }
-    if (slots.length !== playersOnField) {
-      return NextResponse.json({ error: "Total slots must equal playersOnField" }, { status: 400 });
     }
     for (const s of slots) {
       if (!s.name || !["GK", "D", "M", "F"].includes(s.group)) {
@@ -22,11 +19,11 @@ export async function PUT(req: NextRequest) {
     }
 
     await prisma.$transaction([
-      prisma.positionSlot.deleteMany({ where: { teamId: coach.teamId } }),
-      prisma.team.update({ where: { id: coach.teamId }, data: { playersOnField } }),
+      prisma.positionSlot.deleteMany({ where: { seasonId: coach.currentSeasonId } }),
+      prisma.season.update({ where: { id: coach.currentSeasonId }, data: { playersOnField: slots.length } }),
       prisma.positionSlot.createMany({
         data: slots.map((s: { name: string; group: string }, i: number) => ({
-          teamId: coach.teamId,
+          seasonId: coach.currentSeasonId,
           order: i,
           name: s.name,
           group: s.group,
@@ -34,7 +31,7 @@ export async function PUT(req: NextRequest) {
       }),
     ]);
 
-    const updated = await prisma.positionSlot.findMany({ where: { teamId: coach.teamId }, orderBy: { order: "asc" } });
+    const updated = await prisma.positionSlot.findMany({ where: { seasonId: coach.currentSeasonId }, orderBy: { order: "asc" } });
     return NextResponse.json({ slots: updated });
   } catch (e) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -11,32 +11,49 @@ model Team {
   id                 String   @id @default(cuid())
   name               String
   joinCode           String   @unique
-  seasonLabel        String   @default("")
-  playersOnField     Int      @default(8)
+  currentSeasonId    String? // points at one of this team's own Seasons; plain scalar (no DB-level relation), same pattern as Drill.sourceDrillId
   defaultPeriodCount Int      @default(4)
   targetMinutes      Int      @default(30)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   coaches       Coach[]
-  players       Player[]
-  games         Game[]
-  slots         PositionSlot[]
+  seasons       Season[]
   drills        Drill[]
   practicePlans PracticePlan[]
 }
 
+// A season owns its own roster, position template, and games - switching the
+// team's current season swaps all three app-wide, and season fairness totals
+// (derived from a season's own games) naturally reset with it. Practice
+// plans/drills are deliberately NOT season-scoped: a coach's drill library
+// and practice templates are meant to carry forward across seasons.
+model Season {
+  id             String   @id
+  teamId         String
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name           String
+  playersOnField Int      @default(8)
+  archived       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  slots   PositionSlot[]
+  players Player[]
+  games   Game[]
+}
+
 model PositionSlot {
   id        String   @id @default(cuid())
-  teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  seasonId  String
+  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   order     Int
   name      String
   group     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([teamId, order])
+  @@unique([seasonId, order])
 }
 
 model Coach {
@@ -73,8 +90,8 @@ model PasswordReset {
 
 model Player {
   id              String   @id
-  teamId          String
-  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  seasonId        String
+  season          Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   firstName       String
   lastNameInitial String   @default("")
   jerseyNumber    String   @default("")
@@ -91,8 +108,8 @@ model Player {
 
 model Game {
   id              String   @id
-  teamId          String
-  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  seasonId        String
+  season          Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   date            DateTime
   opponent        String
   location        String   @default("")

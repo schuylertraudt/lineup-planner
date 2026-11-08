@@ -5,6 +5,7 @@ export type SyncEntity =
   | "assignment"
   | "gamePeriod"
   | "team"
+  | "season"
   | "drill"
   | "practicePlan"
   | "practiceBlock"

@@ -6,7 +6,7 @@ import { createPlayer, newId, setPlayerActive, updatePlayer } from "@/lib/offlin
 import { displayName } from "@/lib/types";
 
 export default function RosterPage() {
-  const { players, mutate, ready } = useData();
+  const { players, mutate, currentSeasonId, ready } = useData();
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [name, setName] = useState("");
@@ -16,13 +16,14 @@ export default function RosterPage() {
   const inactive = useMemo(() => players.filter((p) => !p.active).sort((a, b) => a.order - b.order), [players]);
 
   async function addPlayer() {
-    if (!name.trim()) return;
+    if (!name.trim() || !currentSeasonId) return;
     const maxOrder = players.reduce((m, p) => Math.max(m, p.order), -1);
-    await createPlayer(mutate, { firstName: name.trim(), order: maxOrder + 1 });
+    await createPlayer(mutate, { seasonId: currentSeasonId, firstName: name.trim(), order: maxOrder + 1 });
     setName("");
   }
 
   async function addBulk() {
+    if (!currentSeasonId) return;
     const names = bulkText
       .split("\n")
       .map((line) => line.trim())
@@ -30,7 +31,7 @@ export default function RosterPage() {
     let maxOrder = players.reduce((m, p) => Math.max(m, p.order), -1);
     for (const n of names) {
       maxOrder += 1;
-      await mutate("player", newId(), { firstName: n, active: true, order: maxOrder });
+      await mutate("player", newId(), { seasonId: currentSeasonId, firstName: n, active: true, order: maxOrder });
     }
     setBulkText("");
     setShowBulk(false);

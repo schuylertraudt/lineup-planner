@@ -6,6 +6,7 @@ export type SyncStatus = "synced" | "pending" | "offline" | "syncing";
 export interface PullResult {
   serverTime: string;
   team: unknown;
+  seasons: unknown[];
   slots: unknown[];
   players: unknown[];
   games: unknown[];

@@ -5,8 +5,8 @@ import { requireTeamCoach } from "@/lib/auth";
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const coach = await requireTeamCoach();
-    const game = await prisma.game.findUnique({ where: { id: params.id } });
-    if (!game || game.teamId !== coach.teamId) {
+    const game = await prisma.game.findUnique({ where: { id: params.id }, include: { season: true } });
+    if (!game || game.season.teamId !== coach.teamId) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 });
     }
     // Availability, Assignment, and GamePeriod rows all cascade-delete with the game.

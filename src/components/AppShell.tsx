@@ -26,7 +26,8 @@ function OfflineShellWarmer() {
 
 function TopBar({ coachName }: { coachName: string }) {
   const router = useRouter();
-  const { team } = useData();
+  const { team, seasons, currentSeasonId } = useData();
+  const currentSeason = seasons.find((s) => s.id === currentSeasonId);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -37,7 +38,7 @@ function TopBar({ coachName }: { coachName: string }) {
   return (
     <header className="no-print sticky top-0 z-30 bg-field text-white px-4 py-2 flex items-center justify-between" style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" }}>
       <div className="min-w-0">
-        <p className="font-bold truncate leading-tight">{team?.name ?? "Lineup Planner"}</p>
+        <p className="font-bold truncate leading-tight">{currentSeason?.name ?? team?.name ?? "Lineup Planner"}</p>
         <p className="text-xs text-emerald-100 truncate leading-tight">{coachName}</p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
